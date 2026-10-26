@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+.AppleDouble
+._*
+
+# Xcode user-specific settings and state
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+
+# Build output
+build/
+DerivedData/
+*.xcarchive
+*.dSYM/
+*.dSYM.zip
+*.ipa
+
+# Swift Package Manager local artifacts
+.build/
+.swiftpm/
