@@ -19,8 +19,11 @@ final class TouchBarView: NSObject {
     private let seekSurface = SeekSurface(frame: .zero)
     private let seekTimeBadge = SeekTimeBadge(frame: .zero)
     private var seekWidth: NSLayoutConstraint!
-    private var scrubProgressTimer: Timer?
+    private var progressAnimationTimer: Timer?
     private var lastScrubFrameAt: Double?
+    private var lastCompactFrameAt: Double?
+    private var compactTimeText = ""
+    private var compactTimePending = false
     private var backButton: NSButton!
     private var playButton: NSButton!
     private var nextButton: NSButton!
@@ -71,10 +74,10 @@ final class TouchBarView: NSObject {
             timeLabel.leadingAnchor.constraint(equalTo: timelineStack.leadingAnchor),
             timeLabel.trailingAnchor.constraint(equalTo: timelineStack.trailingAnchor),
             timeLabel.heightAnchor.constraint(equalToConstant: 16),
-            progressView.leadingAnchor.constraint(equalTo: timelineStack.leadingAnchor, constant: 2),
-            progressView.trailingAnchor.constraint(equalTo: timelineStack.trailingAnchor, constant: -2),
-            progressView.bottomAnchor.constraint(equalTo: timelineStack.bottomAnchor, constant: -4),
-            progressView.heightAnchor.constraint(equalToConstant: 3)
+            progressView.leadingAnchor.constraint(equalTo: timelineStack.leadingAnchor, constant: 3),
+            progressView.trailingAnchor.constraint(equalTo: timelineStack.trailingAnchor, constant: -3),
+            progressView.bottomAnchor.constraint(equalTo: timelineStack.bottomAnchor, constant: -3),
+            progressView.heightAnchor.constraint(equalToConstant: 7)
         ])
         progressView.setAccessibilityLabel("Oynatma ilerlemesi")
         timelineView = timelineStack
@@ -191,6 +194,7 @@ final class TouchBarView: NSObject {
 
     func render(_ newState: MediaState) {
         let animateTitleChange = state.hasMedia && newState.hasMedia && newState.trackKey != state.trackKey
+        if newState.trackKey != state.trackKey { lastCompactFrameAt = nil }
         if newState.trackKey != state.trackKey || !newState.timeline.isValid { closeScrubber() }
         state = newState
         [backButton, playButton, nextButton].forEach { $0?.isEnabled = state.hasMedia }
@@ -234,16 +238,52 @@ final class TouchBarView: NSObject {
 
     func refreshProgress() {
         timelineView.isHidden = !state.timeline.isValid
-        guard state.timeline.isValid else { return }
-        let position = state.timeline.position(at: Date().timeIntervalSince1970)
-        progressView.fraction = position / state.timeline.duration
-        let text = timeText(position)
-        timeLabel.stringValue = text
-        progressView.setAccessibilityValue(text)
+        guard state.timeline.isValid else { updateProgressAnimation(); return }
+        refreshCompactProgress()
         if scrubOpen && !seekSurface.isDragging {
             refreshSeekProgress()
         }
-        updateScrubProgressAnimation()
+        updateProgressAnimation()
+    }
+
+    private func refreshCompactProgress() {
+        guard state.timeline.isValid else { return }
+        let now = CACurrentMediaTime()
+        let position = state.timeline.position(at: Date().timeIntervalSince1970)
+        let target = position / state.timeline.duration
+        if presented, !scrubOpen, state.timeline.isAdvancing,
+           !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+           let lastCompactFrameAt, now - lastCompactFrameAt < 0.2 {
+            let weight = 1 - exp(-max(0, now - lastCompactFrameAt) / 0.06)
+            progressView.fraction += (target - progressView.fraction) * weight
+        } else {
+            progressView.fraction = target
+        }
+        lastCompactFrameAt = now
+        progressView.isAdvancing = state.timeline.isAdvancing
+        let text = timeText(position)
+        if text != compactTimeText || state.seekPending != compactTimePending {
+            compactTimeText = text
+            compactTimePending = state.seekPending
+            let value = NSMutableAttributedString(string: PlaybackTimeline.format(position), attributes: [
+                .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium),
+                .foregroundColor: state.seekPending ? NSColor.systemPink : NSColor(white: 0.62, alpha: 1)
+            ])
+            value.append(NSAttributedString(string: " / ", attributes: [
+                .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium),
+                .foregroundColor: NSColor(white: 0.32, alpha: 1)
+            ]))
+            value.append(NSAttributedString(string: PlaybackTimeline.format(state.timeline.duration), attributes: [
+                .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium),
+                .foregroundColor: NSColor(white: 0.62, alpha: 1)
+            ]))
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.alignment = .center
+            paragraph.lineBreakMode = .byClipping
+            value.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: value.length))
+            timeLabel.attributedStringValue = value
+            progressView.setAccessibilityValue(text)
+        }
     }
 
     private func refreshSeekProgress() {
@@ -265,24 +305,28 @@ final class TouchBarView: NSObject {
         updateSeekTime(position: position, emphasized: state.seekPending)
     }
 
-    private func updateScrubProgressAnimation() {
-        let shouldAnimate = presented && scrubOpen && !scrubClosing
+    private func updateProgressAnimation() {
+        let shouldAnimate = presented && !scrubClosing
             && state.timeline.isAdvancing
             && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         guard shouldAnimate else {
-            scrubProgressTimer?.invalidate()
-            scrubProgressTimer = nil
+            progressAnimationTimer?.invalidate()
+            progressAnimationTimer = nil
             lastScrubFrameAt = nil
+            lastCompactFrameAt = nil
             return
         }
-        guard scrubProgressTimer == nil else { return }
-        // Animate only this visible surface; media polling remains at 0.5s.
+        guard progressAnimationTimer == nil else { return }
+        // Share one frame timer between the compact and expanded surfaces.
+        // Hidden surfaces and the media polling rate are left untouched.
         let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
-            self?.refreshSeekProgress()
+            guard let self else { return }
+            if self.scrubOpen { self.refreshSeekProgress() }
+            else { self.refreshCompactProgress() }
         }
         timer.tolerance = 0.002
         RunLoop.main.add(timer, forMode: .common)
-        scrubProgressTimer = timer
+        progressAnimationTimer = timer
     }
 
     private func updateSeekTime(position: Double, emphasized: Bool) {
@@ -311,7 +355,7 @@ final class TouchBarView: NSObject {
         scrubCloseGeneration += 1
         if animated, presented, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             scrubClosing = true
-            updateScrubProgressAnimation()
+            updateProgressAnimation()
             seekSurface.cancelInteraction()
             animateScrubViews([(seekSurface, 16), (expandedTime, 6)], appearing: false, duration: 0.16)
             let generation = scrubCloseGeneration
@@ -327,7 +371,7 @@ final class TouchBarView: NSObject {
         scrubCloseWork = nil
         scrubClosing = false
         scrubOpen = false
-        updateScrubProgressAnimation()
+        updateProgressAnimation()
         seekSurface.cancelInteraction()
         updateModeViews()
     }
@@ -377,7 +421,7 @@ final class TouchBarView: NSObject {
 
     func setPresented(_ visible: Bool) {
         presented = visible
-        updateScrubProgressAnimation()
+        updateProgressAnimation()
         titleLabel.animationsEnabled = visible && !scrubOpen
         scheduleSongSizing()
     }
@@ -435,14 +479,21 @@ final class TouchBarView: NSObject {
 
 private final class TrackProgressView: NSView {
     var fraction: Double = 0 { didSet { needsDisplay = true } }
+    var isAdvancing = false { didSet { if isAdvancing != oldValue { needsDisplay = true } } }
     override var intrinsicContentSize: NSSize { NSSize(width: 80, height: 28) }
     override func draw(_ dirtyRect: NSRect) {
-        let track = NSRect(x: 0, y: (bounds.height - 3) / 2, width: bounds.width, height: 3)
-        NSColor(white: 0.18, alpha: 1).setFill()
-        NSBezierPath(roundedRect: track, xRadius: 1.5, yRadius: 1.5).fill()
-        guard fraction > 0 else { return }
-        NSColor.systemPink.setFill()
-        NSBezierPath(roundedRect: NSRect(x: track.minX, y: track.minY, width: track.width * min(1, max(0, fraction)), height: 3), xRadius: 1.5, yRadius: 1.5).fill()
+        let track = NSRect(x: 0.5, y: bounds.midY - 3, width: max(1, bounds.width - 1), height: 6)
+        let shape = NSBezierPath(roundedRect: track, xRadius: 3, yRadius: 3)
+        NSColor(white: 0.16, alpha: 1).setFill()
+        shape.fill()
+        let progress = fraction.isFinite ? min(1, max(0, fraction)) : 0
+        guard progress > 0 else { return }
+        let played = NSRect(x: track.minX, y: track.minY, width: track.width * progress, height: track.height)
+        NSGraphicsContext.saveGraphicsState()
+        shape.addClip()
+        NSColor.systemPink.withAlphaComponent(isAdvancing ? 1 : 0.65).setFill()
+        NSBezierPath(roundedRect: played, xRadius: 3, yRadius: 3).fill()
+        NSGraphicsContext.restoreGraphicsState()
     }
 }
 import AppKit
