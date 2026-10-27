@@ -12,6 +12,8 @@ Uygulama normal başlatıldığında Touch Bar panelini gösterir ve uygulamalar
 - `MediaService`: MediaRemote’a doğrudan erişen Objective-C XPC servisi. Xcode tarafından derlenir ve uygulamanın `Contents/XPCServices` dizinine gömülür. Durum 0,5 saniyede bir alınır; süre gösterimi güncellemeler arasında yerel olarak ilerler.
 - `MediaBar/Native/MusicAutomation.m`: Music’e doğrudan Apple Events gönderir. AppleScript, Perl, shell veya başka bir yorumlayıcı kullanmaz. Favorileri 5 saniyede bir okur; düğme sadece favorilere ekler, kaldırmaz.
 
+Music çalarken favorinin yanında **Daha az öner ve sonraki parçaya geç** düğmesi görünür. Parçanın `disliked` (`pHat`) özelliği `true` yapılır ve tekrar okunarak doğrulanır. Doğrulama başarılıysa ve Music hâlâ aynı parçadaysa doğrudan Music’e `next track` komutu gönderilir. Parça zaten değişmişse yeni parça atlanmaz. İzin veya doğrulama hatasında sonraki parçaya geçilmez. İşlem sırasında tekrar dokunma ve favoriye ekleme kilitlenir; Podcasts ve diğer oynatıcılarda bu düğme gösterilmez.
+
 Önceki/sonraki kontrolleri Podcasts’te 15 saniye geri/ileri çalışır. Uzun basmak sarma başlatır; bırakmak, bağlam değişimi veya 15 saniyelik güvenlik sınırı sarmayı bitirir. Süre alanına dokunmak geniş sarma ekranını açar; sürükleme bitince konum gönderilir. Süre alanına yeniden dokunmak normal görünüme döner. Parça bilgisine dokunmak oynatıcıyı öne getirir. Medya yoksa kontroller devre dışı kalır; süre bilgisi yoksa zaman alanı gizlenir.
 
 ## Yerel sistem erişimi
@@ -20,7 +22,7 @@ MediaRemote’un macOS 15.4 sonrasındaki erişim denetimi nedeniyle servis kiml
 
 Touch Bar sunumu da özel macOS API’lerini kullanır. Derleme ve paket doğrulaması, bu özel API’lerin cihaz üzerindeki çalışma doğrulaması değildir. Eksik semboller veya bağlantı hataları uygulamayı çökertmeden sistem günlüğüne yazılır; medya kontrolleri boş/devre dışı duruma döner. Betik tabanlı yedek yol yoktur.
 
-App Sandbox kapalıdır. Music’in favori özelliği ilk kullanımda macOS otomasyon izni gerektirebilir. Uygulama paketi izin açıklamasını ve Apple Events yetkisini içerir. Yayınlama, dağıtım veya açılış kaydı yapılmaz.
+App Sandbox kapalıdır. Music’in favori ve dislike özellikleri ilk kullanımda macOS otomasyon izni gerektirebilir. Uygulama paketi izin açıklamasını ve Apple Events yetkisini içerir. Yayınlama, dağıtım veya açılış kaydı yapılmaz.
 
 MediaRemote özel API bildirimleri `ungive/mediaremote-adapter` projesinin `0e82bf1c44ec39554fbfc402ec88a48c6ae2a0fd` sürümünden alınmıştır. BSD-3-Clause lisansı `MediaBar/Resources/MediaRemoteAdapter-LICENSE.txt` içinde tutulur ve uygulamaya kopyalanır. Eski TouchBar projesi değiştirilmez.
 

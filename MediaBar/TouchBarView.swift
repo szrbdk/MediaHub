@@ -27,6 +27,7 @@ final class TouchBarView: NSObject {
     private var playButton: NSButton!
     private var nextButton: NSButton!
     private var favoriteButton: NSButton!
+    private var dislikeButton: NSButton!
     private var normalControls: NSView!
     private var normalTrailing: NSView!
     private var leftSlot: LayoutReportingStack!
@@ -80,7 +81,7 @@ final class TouchBarView: NSObject {
         ])
         progressView.setAccessibilityLabel("Oynatma ilerlemesi")
         timelineView = timelineStack
-        let trailing = NSStackView(views: [favoriteButton, timelineStack])
+        let trailing = NSStackView(views: [favoriteButton, dislikeButton, timelineStack])
         trailing.spacing = 7
         trailing.alignment = .centerY
         normalTrailing = trailing
@@ -148,6 +149,7 @@ final class TouchBarView: NSObject {
         openPlayer.allowedTouchTypes = .direct
         text.addGestureRecognizer(openPlayer)
         favoriteButton = button("star", "Favorilere ekle", #selector(addFavorite))
+        dislikeButton = button("hand.thumbsdown", "Daha az öner ve sonraki parçaya geç", #selector(dislikeAndSkip))
         let stack = NSStackView(views: [backButton, playButton, nextButton, text])
         text.setContentHuggingPriority(.defaultLow, for: .horizontal)
         stack.distribution = .fill
@@ -208,9 +210,13 @@ final class TouchBarView: NSObject {
         backButton.image = NSImage(systemSymbolName: state.isPodcast ? "gobackward.15" : "backward.end.fill", accessibilityDescription: state.isPodcast ? "15 saniye geri" : "Önceki")
         nextButton.image = NSImage(systemSymbolName: state.isPodcast ? "goforward.15" : "forward.end.fill", accessibilityDescription: state.isPodcast ? "15 saniye ileri" : "Sonraki")
         favoriteButton.isHidden = !state.hasMedia || !state.isMusic
-        favoriteButton.isEnabled = state.hasMedia && state.isMusic && !state.favoritePending
+        favoriteButton.isEnabled = state.hasMedia && state.isMusic && !state.favoritePending && !state.dislikePending
         favoriteButton.image = NSImage(systemSymbolName: state.favorite ? "star.fill" : "star", accessibilityDescription: state.favorite ? "Favorilere eklendi" : "Favorilere ekle")
         favoriteButton.toolTip = state.favoritePending ? "Music’ten onay bekleniyor" : state.favorite ? "Favorilerde" : "Favorilere ekle"
+        dislikeButton.isHidden = !state.hasMedia || !state.isMusic
+        dislikeButton.isEnabled = state.canDislike
+        dislikeButton.image = NSImage(systemSymbolName: state.dislikePending ? "hand.thumbsdown.fill" : "hand.thumbsdown", accessibilityDescription: "Daha az öner ve sonraki parçaya geç")
+        dislikeButton.toolTip = state.dislikePending ? "Music’ten onay bekleniyor" : "Daha az öner ve sonraki parçaya geç"
         renderTitle(animateChange: animateTitleChange)
         refreshProgress()
         scheduleSongSizing()
@@ -421,7 +427,7 @@ final class TouchBarView: NSObject {
         } else {
             constraint = songWidth
             let navigationWidth = normalControls.bounds.width - songInfoView.bounds.width
-            let trailingWidth = max(167, rightSlot.fittingSize.width)
+            let trailingWidth = max(state.isMusic ? 222 : 167, rightSlot.fittingSize.width)
             width = min(320, max(100, availableWidth - left.minX - navigationWidth - trailingWidth - 24))
         }
         guard width.isFinite, abs(constraint.constant - width) > 0.5 else { return }
@@ -448,6 +454,7 @@ final class TouchBarView: NSObject {
     @objc private func next() { onAction?(.next) }
     @objc private func openPlayer() { onAction?(.openPlayer) }
     @objc private func addFavorite() { onAction?(.addFavorite) }
+    @objc private func dislikeAndSkip() { onAction?(.dislikeAndSkip) }
 }
 
 private final class TrackProgressView: NSView {

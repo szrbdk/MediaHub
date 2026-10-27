@@ -8,6 +8,7 @@ final class MediaController {
     private lazy var presenter = TouchBarPresenter(view: view)
     private var state = MediaState()
     private var favoriteRequest = FavoriteRequestState()
+    private var dislikeRequest = FavoriteRequestState()
     private var favoriteReadBusy = false
     private var favoriteWriteRevision: Int?
     private var pollTimer: Timer?
@@ -61,9 +62,11 @@ final class MediaController {
                 self.music.cancelPendingRequests()
                 self.favoriteWriteRevision = nil
                 self.favoriteRequest.changeTrack(to: next.trackKey)
+                self.dislikeRequest.changeTrack(to: next.trackKey)
             } else {
                 next.favorite = self.state.favorite
                 next.favoritePending = self.favoriteRequest.isPending
+                next.dislikePending = self.dislikeRequest.isPending
             }
             self.state = next
             self.view.render(next)
@@ -101,6 +104,7 @@ final class MediaController {
                 if let error { self?.logger.error("Player activation failed: \(error.localizedDescription, privacy: .public)") }
             }
         case .addFavorite: addFavorite()
+        case .dislikeAndSkip: dislikeAndSkip()
         }
     }
 
@@ -123,7 +127,7 @@ final class MediaController {
 
     private func readFavorite() {
         guard !stopped, state.hasMedia, state.isMusic, !favoriteReadBusy,
-              favoriteWriteRevision != revision else { return }
+              favoriteWriteRevision != revision, !dislikeRequest.isPending else { return }
         favoriteReadBusy = true
         let key = state.trackKey
         let expectedRevision = revision
@@ -144,7 +148,7 @@ final class MediaController {
     }
 
     private func addFavorite() {
-        guard state.isMusic, !state.favorite, let request = favoriteRequest.begin() else { return }
+        guard state.isMusic, !state.favorite, !dislikeRequest.isPending, let request = favoriteRequest.begin() else { return }
         let expectedRevision = revision
         favoriteWriteRevision = revision
         state.favoritePending = true
@@ -159,6 +163,32 @@ final class MediaController {
             if let error { self.logger.error("Favorite update failed: \(error, privacy: .public)") }
             self.view.render(self.state)
             self.readFavorite()
+        }
+    }
+
+    private func dislikeAndSkip() {
+        guard state.canDislike, let request = dislikeRequest.begin() else { return }
+        let expectedRevision = revision
+        state.dislikePending = true
+        endSeeking()
+        view.render(state)
+        music.dislikeAndSkip(forTitle: state.title, artist: state.artist) { [weak self] success, error in
+            guard let self, !self.stopped, self.revision == expectedRevision else { return }
+            if let error { self.logger.error("Dislike and skip failed: \(error, privacy: .public)") }
+            // Keep duplicate taps locked while the next track's metadata arrives.
+            // At the end of a queue, allow another attempt after a short delay.
+            let finish = { [weak self] in
+                guard let self, !self.stopped, self.revision == expectedRevision else { return }
+                self.dislikeRequest.finish(request, stillWaiting: false)
+                self.state.dislikePending = self.dislikeRequest.isPending
+                self.view.render(self.state)
+            }
+            if success {
+                self.readState()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: finish)
+            } else {
+                finish()
+            }
         }
     }
 
