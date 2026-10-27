@@ -2,7 +2,7 @@
 
 Bu Mac için geliştirilen, Swift/AppKit ve Objective-C ile yazılmış Touch Bar medya kontrol uygulaması. Xcode 27.1 ile derlenir; hedef macOS 27.0’dır.
 
-Uygulama normal başlatıldığında Touch Bar panelini gösterir ve uygulamalar arasında geçişte korur. Menü çubuğundaki dalga simgesinin menüsünde **MediaBar** başlığı, bir ayırıcı ve **Quit** eylemi bulunur. Simgenin araç ipucu da uygulamanın adını gösterir. Pencere, Dock simgesi, otomatik başlatma ve ayarlar yoktur. Çıkışta panel kapatılır, bekleyen sarma bitiş komutları gönderilir ve XPC bağlantısı kapatılır.
+Uygulama normal başlatıldığında Touch Bar panelini gösterir ve uygulamalar arasında geçişte korur. Menü çubuğundaki dalga simgesinin menüsünde **MediaBar** başlığı, bir ayırıcı ve **Quit** eylemi bulunur. Simgenin araç ipucu da uygulamanın adını gösterir. Ana pencere, Dock simgesi, otomatik başlatma ve ayarlar yoktur; parça değişimlerinde kısa süreli bir bildirim paneli gösterilir. Çıkışta paneller kapatılır, bekleyen sarma bitiş komutları gönderilir ve XPC bağlantısı kapatılır.
 
 ## Yapı
 
@@ -13,6 +13,16 @@ Uygulama normal başlatıldığında Touch Bar panelini gösterir ve uygulamalar
 - `MediaBar/Native/MusicAutomation.m`: Music’e doğrudan Apple Events gönderir. AppleScript, Perl, shell veya başka bir yorumlayıcı kullanmaz. Favorileri 5 saniyede bir okur; düğme sadece favorilere ekler, kaldırmaz.
 
 Önceki/sonraki kontrolleri Podcasts’te 15 saniye geri/ileri çalışır. Uzun basmak sarma başlatır; bırakmak, bağlam değişimi veya 15 saniyelik güvenlik sınırı sarmayı bitirir. Süre alanına dokunmak geniş sarma ekranını açar; sürükleme bitince konum gönderilir. Süre alanına yeniden dokunmak normal görünüme döner. Parça bilgisine dokunmak oynatıcıyı öne getirir. Medya yoksa kontroller devre dışı kalır; süre bilgisi yoksa zaman alanı gizlenir.
+
+## Parça bildirim paneli
+
+Yeni bir parça çalmaya başladığında ekranın üst ortasından bağımsız, koyu bir kart açılır; ekranın üstüne bağlanan siyah bir şerit yoktur. Şarkı adı, sanatçı ve varsa albüm adı gösterilir. Oynatıcı kapak verisi sağlıyorsa kapak, aksi halde dalga simgesi kullanılır. Sesli uyarı yoktur. Panel yaklaşık 3 saniye görünür, sonra yukarı kapanır. Aktif uygulamanın ekranı kullanılır; çentikli ekranlarda metin çentiğin altında konumlandırılır.
+
+Kapak, MediaRemote’un `artworkData` alanından alınır; ağdan indirilmez. XPC servisi ImageIO ile en fazla 160 piksel boyutunda bir PNG üretip aynı parça için önbellekte tutar. Sonradan gelen kapak veya albüm bilgisi açık kartta güncellenir; yeni bildirim açılmaz ve görünme süresi uzatılmaz.
+
+`TrackNotificationPresenter.swift` odağı almayan ve tıklamaları engellemeyen bir `NSPanel` kullanır. Tüm Spaces ve diğer uygulamaların tam ekran alanlarına katılması için pencere davranışları ayarlanmıştır. Görsel tasarım `TrackNotificationView.swift` içindedir. Fiziksel tam ekran davranışı kullanıcı tarafından doğrulanmalıdır.
+
+Başlangıçta zaten çalan parça, duraklat/devam et ve aynı parçaya yeniden bağlanma tekrar duyurulmaz. Hızlı değişimlerde son parça gösterilir; bildirim kuyruğu birikmez. Uyku, kilit ve ekran düzeni değişiminde panel kapatılır. Sistem bildirim izni istenmez ve Music’in kendi bildirim ayarları değiştirilmez; iki bildirim istemiyorsanız Music bildirimlerini Sistem Ayarları’ndan kapatabilirsiniz.
 
 ## Yerel sistem erişimi
 
@@ -32,7 +42,7 @@ Uygulama simgesinin PNG boyutları ve menü çubuğunun tek renkli vektör PDF s
 xcodebuild -project MediaBar.xcodeproj -scheme MediaBar -configuration Debug -derivedDataPath build/Verification CODE_SIGN_IDENTITY=- build
 xcodebuild -project MediaBar.xcodeproj -scheme MediaBar -configuration Release -derivedDataPath build/Verification CODE_SIGN_IDENTITY=- build
 
-xcrun swiftc -module-cache-path build/ModuleCache MediaBar/Models/PlaybackTimeline.swift MediaBar/Models/FavoriteRequestState.swift MediaBar/Models/SeekRequestState.swift MediaBar/Models/MediaState.swift Tests/main.swift -o build/MediaBarModelTests
+xcrun swiftc -module-cache-path build/ModuleCache MediaBar/Models/PlaybackTimeline.swift MediaBar/Models/FavoriteRequestState.swift MediaBar/Models/SeekRequestState.swift MediaBar/Models/MediaState.swift MediaBar/Models/TrackAnnouncementState.swift Tests/main.swift -o build/MediaBarModelTests
 build/MediaBarModelTests
 ```
 

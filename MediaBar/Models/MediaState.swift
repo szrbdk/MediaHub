@@ -3,6 +3,8 @@ import Foundation
 struct MediaState {
     var title = ""
     var artist = ""
+    var album = ""
+    var artworkData: Data?
     var bundleIdentifier = ""
     var trackKey = ""
     var playing = false
@@ -19,6 +21,8 @@ struct MediaState {
     init(payload: [String: Any], now: Double = Date().timeIntervalSince1970) {
         title = payload["title"] as? String ?? ""
         artist = payload["artist"] as? String ?? payload["album"] as? String ?? ""
+        album = payload["album"] as? String ?? ""
+        artworkData = payload["artworkData"] as? Data
         let parent = payload["parentApplicationBundleIdentifier"] as? String ?? ""
         bundleIdentifier = parent.isEmpty ? payload["bundleIdentifier"] as? String ?? "" : parent
         let identity = payload["contentItemIdentifier"] ?? payload["uniqueIdentifier"] ?? ""

@@ -169,7 +169,7 @@
 				HEADER_SEARCH_PATHS = "$(SRCROOT)/Shared";
 				INFOPLIST_FILE = MediaService/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/../Frameworks", "@executable_path/../../../../Frameworks", );
-				OTHER_LDFLAGS = ("-framework", AppKit, );
+				OTHER_LDFLAGS = ("-framework", AppKit, "-framework", ImageIO, );
 				PRODUCT_BUNDLE_IDENTIFIER = com.apple.sezerbudak.MediaBar.MediaService;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -185,7 +185,7 @@
 				HEADER_SEARCH_PATHS = "$(SRCROOT)/Shared";
 				INFOPLIST_FILE = MediaService/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/../Frameworks", "@executable_path/../../../../Frameworks", );
-				OTHER_LDFLAGS = ("-framework", AppKit, );
+				OTHER_LDFLAGS = ("-framework", AppKit, "-framework", ImageIO, );
 				PRODUCT_BUNDLE_IDENTIFIER = com.apple.sezerbudak.MediaBar.MediaService;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;

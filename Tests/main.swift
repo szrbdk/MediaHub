@@ -136,4 +136,47 @@ _ = seek.begin(position: 100, timeline: advancing, now: 1000)
 seek.reset()
 expect(!seek.isPending, "Track changes and shutdown must discard old seek state")
 
+var announcements = TrackAnnouncementState()
+expect(announcements.observe(music) == nil, "Startup must not announce an already-playing track")
+expect(announcements.observe(music) == nil, "Repeated snapshots must not announce the same track")
+var pausedMusic = music
+pausedMusic.playing = false
+expect(announcements.observe(pausedMusic) == nil, "Pausing must not announce a track")
+expect(announcements.observe(music) == nil, "Resuming the same track must not announce it again")
+var newMetadataID = payload()
+newMetadataID["uniqueIdentifier"] = "late-id"
+expect(announcements.observe(MediaState(payload: newMetadataID)) == nil, "An ID update with unchanged song information must not announce again")
+var nextPayload = payload()
+nextPayload["title"] = "Next track"
+let nextTrack = MediaState(payload: nextPayload)
+expect(announcements.observe(nextTrack)?.title == "Next track", "A playing track change must produce an announcement")
+expect(announcements.observe(nextTrack) == nil, "A changed track must only announce once")
+expect(announcements.observe(MediaState()) == nil, "Missing media must not produce a blank announcement")
+expect(announcements.observe(nextTrack) == nil, "Reconnecting to the same track must not repeat its announcement")
+var laterPayload = payload(playing: false)
+laterPayload["title"] = "Later track"
+expect(announcements.observe(MediaState(payload: laterPayload)) == nil, "A selected paused track waits until playback starts")
+laterPayload["playing"] = true
+expect(announcements.observe(MediaState(payload: laterPayload))?.title == "Later track", "Starting the newly selected track must announce it")
+expect(announcements.observe(music)?.title == music.title, "Returning to an earlier track is a new track change")
+var initiallyIdle = TrackAnnouncementState()
+expect(initiallyIdle.observe(MediaState()) == nil, "An idle launch must remain quiet")
+expect(initiallyIdle.observe(music) != nil, "Starting playback after an idle launch must announce the first track")
+
+var coverPayload = nextPayload
+let coverBytes = Data([1, 2, 3, 4])
+coverPayload["album"] = "Album name"
+coverPayload["artworkData"] = coverBytes
+let coveredTrack = MediaState(payload: coverPayload)
+expect(coveredTrack.album == "Album name", "Album metadata must reach the app state")
+expect(coveredTrack.artworkData == coverBytes, "Artwork must cross the model as binary data")
+let coveredAnnouncement = announcements.observe(coveredTrack)
+expect(coveredAnnouncement?.album == "Album name", "Announcements must carry the album name")
+expect(coveredAnnouncement?.artworkData == coverBytes, "Announcements must carry the available cover")
+coverPayload["artworkData"] = Data([5, 6, 7])
+expect(announcements.observe(MediaState(payload: coverPayload)) == nil, "A cover update must not create a second notification")
+coverPayload["album"] = "Updated album"
+expect(announcements.observe(MediaState(payload: coverPayload)) == nil, "Late album metadata must not create a second notification")
+expect(MediaState(payload: payload()).artworkData == nil, "A player without artwork must allow the fallback icon")
+
 print("Passed \(assertions) model assertions; no app or media service was launched.")

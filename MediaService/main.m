@@ -1,4 +1,5 @@
 #import <AppKit/AppKit.h>
+#import <ImageIO/ImageIO.h>
 #import "MediaServiceProtocol.h"
 #import "MediaRemote.h"
 
@@ -6,6 +7,9 @@
 // Its bundle ID uses the com.apple prefix accepted by mediaremoted on this Mac.
 @interface MediaService : NSObject <NSXPCListenerDelegate, MediaServiceProtocol>
 @property(nonatomic, strong) MediaRemote *remote;
+@property(nonatomic, copy) NSString *artworkKey;
+@property(nonatomic, strong) NSData *originalArtwork;
+@property(nonatomic, strong) NSData *thumbnailArtwork;
 @end
 
 @implementation MediaService
@@ -18,6 +22,47 @@
     connection.exportedObject = self;
     [connection resume];
     return YES;
+}
+- (NSData *)artworkForInfo:(NSDictionary *)info {
+    NSString *identity = [@[
+        info[kMRMediaRemoteNowPlayingInfoTitle] ?: @"",
+        info[kMRMediaRemoteNowPlayingInfoArtist] ?: @"",
+        info[kMRMediaRemoteNowPlayingInfoAlbum] ?: @""
+    ] description];
+    @synchronized (self) {
+        if (![identity isEqualToString:self.artworkKey]) {
+            self.artworkKey = identity;
+            self.originalArtwork = nil;
+            self.thumbnailArtwork = nil;
+        }
+        id raw = info[kMRMediaRemoteNowPlayingInfoArtworkData];
+        // Retain the same track's thumbnail during temporary artwork omissions.
+        if (![raw isKindOfClass:NSData.class] || ![raw length]) return self.thumbnailArtwork;
+        if ([raw length] > 8 * 1024 * 1024) return nil;
+        if ([self.originalArtwork isEqualToData:raw]) return self.thumbnailArtwork;
+        self.originalArtwork = raw;
+        self.thumbnailArtwork = nil;
+        CGImageSourceRef source = CGImageSourceCreateWithData((__bridge CFDataRef)raw,
+            (__bridge CFDictionaryRef)@{(__bridge NSString *)kCGImageSourceShouldCache: @NO});
+        if (!source) return nil;
+        CGImageRef image = CGImageSourceCreateThumbnailAtIndex(source, 0, (__bridge CFDictionaryRef)@{
+            (__bridge NSString *)kCGImageSourceCreateThumbnailFromImageAlways: @YES,
+            (__bridge NSString *)kCGImageSourceThumbnailMaxPixelSize: @160,
+            (__bridge NSString *)kCGImageSourceCreateThumbnailWithTransform: @YES
+        });
+        CFRelease(source);
+        if (!image) return nil;
+        NSMutableData *png = [NSMutableData data];
+        CGImageDestinationRef destination = CGImageDestinationCreateWithData((__bridge CFMutableDataRef)png,
+            CFSTR("public.png"), 1, NULL);
+        if (destination) {
+            CGImageDestinationAddImage(destination, image, NULL);
+            if (CGImageDestinationFinalize(destination) && png.length <= 128 * 1024) self.thumbnailArtwork = png;
+            CFRelease(destination);
+        }
+        CGImageRelease(image);
+        return self.thumbnailArtwork;
+    }
 }
 - (void)readStateWithReply:(void (^)(NSDictionary *, NSString *))reply {
     MediaRemote *remote = self.remote;
@@ -51,6 +96,8 @@
             id value = info[source];
             if ([value isKindOfClass:NSString.class] || [value isKindOfClass:NSNumber.class]) snapshot[key] = value;
         }];
+        NSData *artwork = [self artworkForInfo:info];
+        if (artwork) snapshot[@"artworkData"] = artwork;
         NSDictionary *times = @{@"durationMicros": kMRMediaRemoteNowPlayingInfoDuration,
                                 @"elapsedTimeMicros": kMRMediaRemoteNowPlayingInfoElapsedTime};
         [times enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSString *source, BOOL *stop) {

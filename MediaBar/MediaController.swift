@@ -5,6 +5,8 @@ final class MediaController {
     let view = TouchBarView()
     private let client = MediaClient()
     private let music = MusicAutomation()
+    private let trackNotifications = TrackNotificationPresenter()
+    private var trackAnnouncements = TrackAnnouncementState()
     private lazy var presenter = TouchBarPresenter(view: view)
     private var state = MediaState()
     private var favoriteRequest = FavoriteRequestState()
@@ -29,6 +31,7 @@ final class MediaController {
         view.onAction = { [weak self] in self?.handle($0) }
         presenter.onContextChange = { [weak self] in self?.endSeeking() }
         presenter.start()
+        trackNotifications.start()
         pollTimer = timer(interval: 0.5) { [weak self] in self?.readState() }
         progressTimer = timer(interval: 0.5) { [weak self] in self?.view.refreshProgress() }
         favoriteTimer = timer(interval: 5) { [weak self] in self?.readFavorite() }
@@ -76,6 +79,13 @@ final class MediaController {
             next.seekPending = self.seekRequest.isPending
             self.state = next
             self.view.render(next)
+            if payload != nil {
+                if let announcement = self.trackAnnouncements.observe(next) {
+                    self.trackNotifications.show(announcement)
+                } else {
+                    self.trackNotifications.updateContent(for: next)
+                }
+            }
             if changed { self.readFavorite() }
         }
     }
@@ -187,6 +197,7 @@ final class MediaController {
         music.cancelPendingRequests()
         [pollTimer, progressTimer, favoriteTimer].forEach { $0?.invalidate() }
         presenter.stop()
+        trackNotifications.stop()
         view.stop()
         endSeeking { [self] in client.stop(completion: completion) }
     }
