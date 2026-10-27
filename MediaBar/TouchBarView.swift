@@ -9,12 +9,20 @@ final class TouchBarView: NSObject {
     private var state = MediaState()
     private var presented = false
     private var scrubOpen = false
+    private var scrubClosing = false
+    private var scrubCloseWork: DispatchWorkItem?
+    private var scrubCloseGeneration = 0
     private var scrubTrackKey = ""
     private let titleLabel = MarqueeLabel(labelWithString: "")
     private let timeLabel = NSTextField(labelWithString: "")
     private let progressView = TrackProgressView()
     private let seekSurface = SeekSurface(frame: .zero)
-    private let seekLabel = NSTextField(labelWithString: "")
+    private let seekTimeBadge = SeekTimeBadge(frame: .zero)
+    private var seekWidth: NSLayoutConstraint!
+    private var pendingSeekPosition: Double?
+    private var pendingSeekBeganAt: Double = 0
+    private var scrubProgressTimer: Timer?
+    private var lastScrubFrameAt: Double?
     private var backButton: NSButton!
     private var playButton: NSButton!
     private var nextButton: NSButton!
@@ -149,33 +157,34 @@ final class TouchBarView: NSObject {
     }
 
     private func makeScrubBar() {
-        seekSurface.widthAnchor.constraint(equalToConstant: 480).isActive = true
+        seekWidth = seekSurface.widthAnchor.constraint(equalToConstant: 540)
+        seekWidth.priority = NSLayoutConstraint.Priority(999)
+        seekWidth.isActive = true
         seekSurface.heightAnchor.constraint(equalToConstant: 30).isActive = true
+        seekSurface.wantsLayer = true
         seekSurface.onPreview = { [weak self] fraction in
-            guard let self, self.scrubTrackKey == self.state.trackKey else { return }
-            self.seekLabel.stringValue = self.timeText(fraction * self.state.timeline.duration)
+            guard let self, self.scrubOpen, !self.scrubClosing, self.scrubTrackKey == self.state.trackKey else { return }
+            self.pendingSeekPosition = nil
+            self.updateSeekTime(position: fraction * self.state.timeline.duration, emphasized: true)
         }
         seekSurface.onCommit = { [weak self] fraction in
-            guard let self, self.scrubOpen, self.state.timeline.isValid,
+            guard let self, self.scrubOpen, !self.scrubClosing, self.state.timeline.isValid,
                   self.scrubTrackKey == self.state.trackKey else { return }
+            self.pendingSeekPosition = fraction * self.state.timeline.duration
+            self.pendingSeekBeganAt = CACurrentMediaTime()
+            self.updateSeekTime(position: fraction * self.state.timeline.duration, emphasized: true)
             self.onAction?(.seek(fraction: fraction, trackKey: self.scrubTrackKey))
         }
-        seekSurface.onCancel = { [weak self] in self?.refreshProgress() }
+        seekSurface.onCancel = { [weak self] in
+            self?.pendingSeekPosition = nil
+            self?.refreshProgress()
+        }
         seekSurface.isHidden = true
         leftSlot.addArrangedSubview(seekSurface)
-        seekLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
-        seekLabel.textColor = NSColor(white: 0.62, alpha: 1)
-        seekLabel.alignment = .center
-        let target = NSView()
-        seekLabel.translatesAutoresizingMaskIntoConstraints = false
-        target.addSubview(seekLabel)
+        let target = seekTimeBadge
         NSLayoutConstraint.activate([
             target.widthAnchor.constraint(equalToConstant: 112),
-            target.heightAnchor.constraint(equalToConstant: 28),
-            seekLabel.topAnchor.constraint(equalTo: target.topAnchor, constant: 1),
-            seekLabel.leadingAnchor.constraint(equalTo: target.leadingAnchor),
-            seekLabel.trailingAnchor.constraint(equalTo: target.trailingAnchor),
-            seekLabel.heightAnchor.constraint(equalToConstant: 16)
+            target.heightAnchor.constraint(equalToConstant: 30)
         ])
         let tap = NSClickGestureRecognizer(target: self, action: #selector(toggleScrubber(_:)))
         tap.allowedTouchTypes = .direct
@@ -190,6 +199,10 @@ final class TouchBarView: NSObject {
         let animateTitleChange = state.hasMedia && newState.hasMedia && newState.trackKey != state.trackKey
         if newState.trackKey != state.trackKey || !newState.timeline.isValid { closeScrubber() }
         state = newState
+        if let pendingSeekPosition,
+           abs(state.timeline.position(at: Date().timeIntervalSince1970) - pendingSeekPosition) < 1.5 {
+            self.pendingSeekPosition = nil
+        }
         [backButton, playButton, nextButton].forEach { $0?.isEnabled = state.hasMedia }
         playButton.image = NSImage(systemSymbolName: state.playing ? "pause.fill" : "play.fill", accessibilityDescription: "Oynat / duraklat")
         backButton.image = NSImage(systemSymbolName: state.isPodcast ? "gobackward.15" : "backward.end.fill", accessibilityDescription: state.isPodcast ? "15 saniye geri" : "Önceki")
@@ -238,9 +251,58 @@ final class TouchBarView: NSObject {
         timeLabel.stringValue = text
         progressView.setAccessibilityValue(text)
         if scrubOpen && !seekSurface.isDragging {
-            seekSurface.fraction = position / state.timeline.duration
-            seekLabel.stringValue = text
+            refreshSeekProgress()
         }
+        updateScrubProgressAnimation()
+    }
+
+    private func refreshSeekProgress() {
+        guard scrubOpen, !scrubClosing, state.timeline.isValid, !seekSurface.isDragging else { return }
+        let now = CACurrentMediaTime()
+        // Keep the released target visible until a matching state arrives.
+        // A failed/unsupported seek falls back to the player after 3 seconds.
+        if pendingSeekPosition != nil && now - pendingSeekBeganAt >= 3 {
+            pendingSeekPosition = nil
+        }
+        let position = pendingSeekPosition ?? state.timeline.position(at: Date().timeIntervalSince1970)
+        let target = position / state.timeline.duration
+        let canSmooth = presented && state.timeline.isAdvancing && pendingSeekPosition == nil
+            && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        if canSmooth, let lastScrubFrameAt, now - lastScrubFrameAt < 0.2 {
+            // A short, time-based filter absorbs small metadata corrections.
+            // Finger gestures and released seek targets always bypass it.
+            let weight = 1 - exp(-max(0, now - lastScrubFrameAt) / 0.06)
+            seekSurface.fraction += (target - seekSurface.fraction) * weight
+        } else {
+            seekSurface.fraction = target
+        }
+        lastScrubFrameAt = now
+        updateSeekTime(position: position, emphasized: pendingSeekPosition != nil)
+    }
+
+    private func updateScrubProgressAnimation() {
+        let shouldAnimate = presented && scrubOpen && !scrubClosing
+            && state.timeline.isAdvancing && pendingSeekPosition == nil
+            && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        guard shouldAnimate else {
+            scrubProgressTimer?.invalidate()
+            scrubProgressTimer = nil
+            lastScrubFrameAt = nil
+            return
+        }
+        guard scrubProgressTimer == nil else { return }
+        // Animate only this visible surface; media polling remains at 0.5s.
+        let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
+            self?.refreshSeekProgress()
+        }
+        timer.tolerance = 0.002
+        RunLoop.main.add(timer, forMode: .common)
+        scrubProgressTimer = timer
+    }
+
+    private func updateSeekTime(position: Double, emphasized: Bool) {
+        seekTimeBadge.update(position: position, duration: state.timeline.duration, emphasized: emphasized)
+        seekSurface.setAccessibilityValue(timeText(position))
     }
 
     private func timeText(_ position: Double) -> String {
@@ -248,24 +310,47 @@ final class TouchBarView: NSObject {
     }
 
     @objc private func toggleScrubber(_ recognizer: NSClickGestureRecognizer) {
-        guard recognizer.state == .ended else { return }
-        if scrubOpen { closeScrubber(); return }
+        guard recognizer.state == .ended, !scrubClosing else { return }
+        if scrubOpen { closeScrubber(animated: true); return }
         guard state.timeline.isValid else { return }
         onAction?(.endSeeking)
         scrubTrackKey = state.trackKey
         scrubOpen = true
         refreshProgress()
-        updateModeViews()
+        updateModeViews(animateOpening: true)
     }
 
-    private func closeScrubber() {
+    private func closeScrubber(animated: Bool = false) {
         guard scrubOpen else { return }
+        scrubCloseWork?.cancel()
+        scrubCloseGeneration += 1
+        if animated, presented, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            scrubClosing = true
+            updateScrubProgressAnimation()
+            pendingSeekPosition = nil
+            seekSurface.cancelInteraction()
+            animateScrubViews([(seekSurface, 16), (expandedTime, 6)], appearing: false, duration: 0.16)
+            let generation = scrubCloseGeneration
+            let work = DispatchWorkItem { [weak self] in
+                guard let self, self.scrubClosing, self.scrubCloseGeneration == generation else { return }
+                self.closeScrubber()
+                self.animateScrubViews([(self.normalControls, -8), (self.normalTrailing, -3)], appearing: true, duration: 0.08)
+            }
+            scrubCloseWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.16, execute: work)
+            return
+        }
+        scrubCloseWork = nil
+        scrubClosing = false
         scrubOpen = false
+        updateScrubProgressAnimation()
+        pendingSeekPosition = nil
         seekSurface.cancelInteraction()
         updateModeViews()
     }
 
-    private func updateModeViews() {
+    private func updateModeViews(animateOpening: Bool = false) {
+        [seekSurface, expandedTime, normalControls, normalTrailing].forEach { $0?.layer?.removeAnimation(forKey: "scrub.reveal") }
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0
             context.allowsImplicitAnimation = false
@@ -280,39 +365,75 @@ final class TouchBarView: NSObject {
             CATransaction.commit()
         }
         titleLabel.animationsEnabled = presented && !scrubOpen
+        resizeContentToAvailableWidth()
+        if animateOpening, presented, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            animateScrubViews([(seekSurface, 16), (expandedTime, 6)], appearing: true, duration: 0.24)
+        }
         scheduleSongSizing()
+    }
+
+    private func animateScrubViews(_ views: [(NSView, Double)], appearing: Bool, duration: Double) {
+        guard presented, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+        for (view, distance) in views {
+            view.wantsLayer = true
+            let fade = CABasicAnimation(keyPath: "opacity")
+            fade.fromValue = appearing ? 0 : (view.layer?.presentation()?.opacity ?? 1)
+            fade.toValue = appearing ? 1 : 0
+            let slide = CABasicAnimation(keyPath: "transform.translation.x")
+            slide.fromValue = appearing ? distance : 0
+            slide.toValue = appearing ? 0 : distance
+            let animation = CAAnimationGroup()
+            animation.animations = [fade, slide]
+            animation.duration = duration
+            animation.timingFunction = CAMediaTimingFunction(name: appearing ? .easeOut : .easeIn)
+            animation.fillMode = .forwards
+            animation.isRemovedOnCompletion = appearing
+            view.layer?.add(animation, forKey: "scrub.reveal")
+        }
     }
 
     func setPresented(_ visible: Bool) {
         presented = visible
+        updateScrubProgressAnimation()
         titleLabel.animationsEnabled = visible && !scrubOpen
         scheduleSongSizing()
     }
 
     private func scheduleSongSizing() {
-        guard !scrubOpen, presented else { return }
+        guard presented else { return }
         songSizingWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in
-            guard let self, !self.scrubOpen, self.presented, let window = self.leftSlot.window,
-                  window === self.rightSlot.window else { return }
-            let left = self.leftSlot.convert(self.leftSlot.bounds, to: nil)
-            let navigationWidth = self.normalControls.bounds.width - self.songInfoView.bounds.width
-            let availableWidth = window.contentView?.bounds.width ?? window.frame.width
-            let reservedTrailingWidth = max(167, self.rightSlot.fittingSize.width)
-            let width = min(320, max(100, availableWidth - left.minX - navigationWidth - reservedTrailingWidth - 24))
-            guard width.isFinite, abs(self.songWidth.constant - width) > 0.5 else { return }
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0
-                context.allowsImplicitAnimation = false
-                self.songWidth.constant = width
-                self.songInfoView.invalidateIntrinsicContentSize()
-                self.normalControls.invalidateIntrinsicContentSize()
-                self.leftSlot.invalidateIntrinsicContentSize()
-                self.leftSlot.layoutSubtreeIfNeeded()
-            }
-        }
+        let work = DispatchWorkItem { [weak self] in self?.resizeContentToAvailableWidth() }
         songSizingWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: work)
+    }
+
+    private func resizeContentToAvailableWidth() {
+        guard presented, let window = leftSlot.window, window === rightSlot.window else { return }
+        let left = leftSlot.convert(leftSlot.bounds, to: nil)
+        let availableWidth = window.contentView?.bounds.width ?? window.frame.width
+        let constraint: NSLayoutConstraint
+        let width: CGFloat
+        if scrubOpen {
+            // Give the ruler the space formerly reserved for transport buttons,
+            // song text and favorites, keeping the time badge and system controls.
+            constraint = seekWidth
+            width = min(560, max(160, availableWidth - left.minX - rightSlot.fittingSize.width - 24))
+        } else {
+            constraint = songWidth
+            let navigationWidth = normalControls.bounds.width - songInfoView.bounds.width
+            let trailingWidth = max(167, rightSlot.fittingSize.width)
+            width = min(320, max(100, availableWidth - left.minX - navigationWidth - trailingWidth - 24))
+        }
+        guard width.isFinite, abs(constraint.constant - width) > 0.5 else { return }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0
+            context.allowsImplicitAnimation = false
+            constraint.constant = width
+            songInfoView.invalidateIntrinsicContentSize()
+            normalControls.invalidateIntrinsicContentSize()
+            leftSlot.invalidateIntrinsicContentSize()
+            leftSlot.layoutSubtreeIfNeeded()
+        }
     }
 
     func stop() {
@@ -485,6 +606,50 @@ final class MarqueeLabel: NSTextField {
     deinit { animationTimer?.invalidate() }
 }
 
+/// The expanded mode keeps the compact, single-line time format without a backdrop.
+private final class SeekTimeBadge: NSView {
+    private let label = NSTextField(labelWithString: "")
+    private let timeFont = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        label.font = timeFont
+        label.alignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.setAccessibilityElement(false)
+        addSubview(label)
+        NSLayoutConstraint.activate([
+            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            label.leadingAnchor.constraint(equalTo: leadingAnchor),
+            label.trailingAnchor.constraint(equalTo: trailingAnchor),
+            label.heightAnchor.constraint(equalToConstant: 18)
+        ])
+        setAccessibilityElement(true)
+        setAccessibilityRole(.button)
+        setAccessibilityLabel("Sarma ekranını kapat")
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func update(position: Double, duration: Double, emphasized: Bool) {
+        let font = timeFont
+        let normalColor = NSColor(white: 0.62, alpha: 1)
+        let text = NSMutableAttributedString(string: PlaybackTimeline.format(position), attributes: [
+            .font: font, .foregroundColor: emphasized ? NSColor.systemPink : normalColor
+        ])
+        text.append(NSAttributedString(string: " / \(PlaybackTimeline.format(duration))", attributes: [
+            .font: font, .foregroundColor: normalColor
+        ]))
+        // The playhead moves every frame; time text changes only each second
+        // or when the drag/confirmation highlight changes.
+        if !label.attributedStringValue.isEqual(to: text) {
+            label.attributedStringValue = text
+            setAccessibilityValue(text.string)
+        }
+    }
+}
+
 /// A large direct-touch target for the expanded seek screen. Dragging previews;
 /// only releasing a successful gesture sends a seek command.
 final class SeekSurface: NSView, NSGestureRecognizerDelegate {
@@ -492,7 +657,7 @@ final class SeekSurface: NSView, NSGestureRecognizerDelegate {
     var onPreview: ((Double) -> Void)?
     var onCommit: ((Double) -> Void)?
     var onCancel: (() -> Void)?
-    var isDragging = false
+    private(set) var isDragging = false { didSet { needsDisplay = true } }
     private var pan: NSPanGestureRecognizer!
 
     func cancelInteraction() {
@@ -529,7 +694,7 @@ final class SeekSurface: NSView, NSGestureRecognizerDelegate {
             isDragging = false
             fraction = value(recognizer)
             onCommit?(fraction)
-        case .cancelled:
+        case .cancelled, .failed:
             isDragging = false
             onCancel?()
         default: break
@@ -544,14 +709,50 @@ final class SeekSurface: NSView, NSGestureRecognizerDelegate {
         otherGestureRecognizer === pan
     }
     override func draw(_ dirtyRect: NSRect) {
-        let track = NSRect(x: 8, y: bounds.midY - 3, width: max(1, bounds.width - 16), height: 6)
-        NSColor(white: 0.2, alpha: 1).setFill()
-        NSBezierPath(roundedRect: track, xRadius: 3, yRadius: 3).fill()
-        let x = track.minX + track.width * min(1, max(0, fraction))
-        NSColor.systemPink.setFill()
-        NSBezierPath(roundedRect: NSRect(x: track.minX, y: track.minY, width: x - track.minX, height: 6), xRadius: 3, yRadius: 3).fill()
+        let track = NSRect(x: 8, y: bounds.midY - 10, width: max(1, bounds.width - 16), height: 20)
+        let shape = NSBezierPath(roundedRect: track, xRadius: 6, yRadius: 6)
+        let x = track.minX + track.width * (fraction.isFinite ? min(1, max(0, fraction)) : 0)
+
+        NSGraphicsContext.saveGraphicsState()
+        shape.addClip()
+        NSGradient(starting: NSColor(white: 0.10, alpha: 1), ending: NSColor(white: 0.045, alpha: 1))?
+            .draw(in: track, angle: 90)
+        if x > track.minX {
+            let played = NSRect(x: track.minX, y: track.minY, width: x - track.minX, height: track.height)
+            NSGradient(starting: NSColor.systemPink.withAlphaComponent(0.36),
+                       ending: NSColor.systemPink.withAlphaComponent(isDragging ? 0.88 : 0.68))?
+                .draw(in: played, angle: 0)
+        }
+
+        // These are evenly spaced ruler marks, not a simulated audio waveform.
+        let tickCount = max(1, Int((track.width - 12) / 8))
+        for index in 0...tickCount {
+            let tickX = track.minX + 6 + CGFloat(index) * (track.width - 12) / CGFloat(tickCount)
+            let height: CGFloat = index.isMultiple(of: 5) ? 10 : 5
+            let tick = NSBezierPath()
+            tick.move(to: NSPoint(x: tickX, y: track.midY - height / 2))
+            tick.line(to: NSPoint(x: tickX, y: track.midY + height / 2))
+            tick.lineWidth = 1
+            (tickX <= x ? NSColor.white.withAlphaComponent(0.54) : NSColor.white.withAlphaComponent(0.19)).setStroke()
+            tick.stroke()
+        }
+        NSGraphicsContext.restoreGraphicsState()
+        NSColor.white.withAlphaComponent(0.09).setStroke()
+        shape.lineWidth = 0.5
+        shape.stroke()
+
+        // A bright playhead replaces the round slider knob. Its hit area is
+        // still the full 30pt surface, so precision does not cost touch comfort.
+        let playhead = NSBezierPath(roundedRect: NSRect(x: x - 2, y: bounds.midY - 12, width: 4, height: 24), xRadius: 2, yRadius: 2)
+        NSGraphicsContext.saveGraphicsState()
+        let glow = NSShadow()
+        glow.shadowColor = NSColor.systemPink.withAlphaComponent(isDragging ? 0.6 : 0.25)
+        glow.shadowBlurRadius = isDragging ? 7 : 4
+        glow.shadowOffset = .zero
+        glow.set()
         NSColor.white.setFill()
-        NSBezierPath(ovalIn: NSRect(x: x - 6, y: bounds.midY - 6, width: 12, height: 12)).fill()
+        playhead.fill()
+        NSGraphicsContext.restoreGraphicsState()
     }
 }
 
