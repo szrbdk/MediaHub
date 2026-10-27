@@ -9,11 +9,9 @@ struct MediaState {
     var timeline = PlaybackTimeline()
     var favorite = false
     var favoritePending = false
-    var dislikePending = false
     var hasMedia: Bool { !title.isEmpty }
     var isMusic: Bool { bundleIdentifier == "com.apple.Music" }
     var isPodcast: Bool { bundleIdentifier == "com.apple.podcasts" }
-    var canDislike: Bool { hasMedia && isMusic && !favoritePending && !dislikePending }
 
     init() {}
 
@@ -32,7 +30,7 @@ struct MediaState {
 }
 
 enum MediaAction {
-    case togglePlayback, previous, next, openPlayer, addFavorite, dislikeAndSkip
+    case togglePlayback, previous, next, openPlayer, addFavorite
     case beginSeeking(forward: Bool)
     case endSeeking
     case seek(fraction: Double, trackKey: String)

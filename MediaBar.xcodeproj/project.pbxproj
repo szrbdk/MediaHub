@@ -326,7 +326,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSAppleEventsUsageDescription = "MediaBar, Music’te çalan parçanın favori durumunu gösterir; dokunduğunuzda favorilere ekler veya daha az öner olarak işaretleyip sonraki parçaya geçer.";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "MediaBar, Music’te çalan parçanın favori durumunu gösterir ve dokunduğunuzda favorilere ekler.";
 				OTHER_LDFLAGS = ("-framework", Carbon, );
 				SWIFT_OBJC_BRIDGING_HEADER = "MediaBar/Native/MediaBar-Bridging-Header.h";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -361,7 +361,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSAppleEventsUsageDescription = "MediaBar, Music’te çalan parçanın favori durumunu gösterir; dokunduğunuzda favorilere ekler veya daha az öner olarak işaretleyip sonraki parçaya geçer.";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "MediaBar, Music’te çalan parçanın favori durumunu gösterir ve dokunduğunuzda favorilere ekler.";
 				OTHER_LDFLAGS = ("-framework", Carbon, );
 				SWIFT_OBJC_BRIDGING_HEADER = "MediaBar/Native/MediaBar-Bridging-Header.h";
 				LD_RUNPATH_SEARCH_PATHS = (

@@ -60,23 +60,11 @@ expect(PlaybackTimeline.format(.infinity) == "–:––", "Infinite display tim
 
 let music = MediaState(payload: payload(), now: 1000)
 expect(music.hasMedia && music.isMusic && !music.isPodcast, "Music source detection")
-expect(music.canDislike, "Music tracks should support dislike and skip")
-expect(!MediaState().canDislike, "Dislike must be unavailable without media")
-var feedbackPending = music
-feedbackPending.favoritePending = true
-expect(!feedbackPending.canDislike, "Dislike must wait for a pending favorite write")
-feedbackPending.favoritePending = false
-feedbackPending.dislikePending = true
-expect(!feedbackPending.canDislike, "Duplicate dislike taps must be disabled")
-feedbackPending.dislikePending = false
-feedbackPending.favorite = true
-expect(feedbackPending.canDislike, "A favorited track can still receive Suggest Less")
 var podcastPayload = payload()
 podcastPayload["bundleIdentifier"] = "com.apple.podcasts.helper"
 podcastPayload["parentApplicationBundleIdentifier"] = "com.apple.podcasts"
 let podcast = MediaState(payload: podcastPayload)
 expect(podcast.isPodcast && podcast.bundleIdentifier == "com.apple.podcasts", "Parent player should own controls")
-expect(!podcast.canDislike, "Music feedback must not be sent for Podcasts")
 var emptyParent = payload()
 emptyParent["parentApplicationBundleIdentifier"] = ""
 expect(MediaState(payload: emptyParent).isMusic, "Empty parent should fall back to bundle identifier")
