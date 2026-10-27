@@ -26,7 +26,7 @@ struct TrackAnnouncementState {
     private var initialized = false
     private var lastAnnouncement: TrackAnnouncement?
 
-    mutating func observe(_ state: MediaState) -> TrackAnnouncement? {
+    mutating func observe(_ state: MediaState, enabled: Bool = true) -> TrackAnnouncement? {
         let candidate = state.hasMedia ? TrackAnnouncement(state: state) : nil
         if !initialized {
             initialized = true
@@ -36,6 +36,6 @@ struct TrackAnnouncementState {
         guard state.playing, let candidate else { return nil }
         if let lastAnnouncement, candidate.hasSameTrack(as: lastAnnouncement) { return nil }
         lastAnnouncement = candidate
-        return candidate
+        return enabled ? candidate : nil
     }
 }

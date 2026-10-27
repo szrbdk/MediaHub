@@ -179,4 +179,32 @@ coverPayload["album"] = "Updated album"
 expect(announcements.observe(MediaState(payload: coverPayload)) == nil, "Late album metadata must not create a second notification")
 expect(MediaState(payload: payload()).artworkData == nil, "A player without artwork must allow the fallback icon")
 
+// Inject an in-memory store so preference tests never change the user's settings.
+final class TestPreferenceStore: PreferenceStore {
+    var values: [String: Any] = [:]
+    func object(forKey key: String) -> Any? { values[key] }
+    func set(_ value: Any?, forKey key: String) { values[key] = value }
+}
+let preferenceStore = TestPreferenceStore()
+let preferences = FeaturePreferences(store: preferenceStore)
+expect(preferences.isEnabled(.notifications), "Notifications should default to enabled")
+expect(preferences.isEnabled(.touchBar), "Touch Bar should default to enabled")
+preferences.setEnabled(false, for: .notifications)
+expect(!preferences.isEnabled(.notifications) && preferences.isEnabled(.touchBar), "Notification and Touch Bar choices must be independent")
+preferences.setEnabled(false, for: .touchBar)
+let reloadedPreferences = FeaturePreferences(store: preferenceStore)
+expect(!reloadedPreferences.isEnabled(.notifications) && !reloadedPreferences.isEnabled(.touchBar), "Recreating preferences must retain both disabled choices")
+reloadedPreferences.setEnabled(true, for: .notifications)
+expect(preferences.isEnabled(.notifications) && !preferences.isEnabled(.touchBar), "Re-enabling notifications must preserve the Touch Bar setting")
+reloadedPreferences.setEnabled(true, for: .touchBar)
+expect(FeaturePreferences(store: preferenceStore).isEnabled(.touchBar), "The re-enabled Touch Bar choice must also persist")
+preferenceStore.values[FeaturePreferences.Feature.touchBar.rawValue] = "invalid"
+expect(preferences.isEnabled(.touchBar), "An invalid saved value should fall back to enabled")
+
+var mutedAnnouncements = TrackAnnouncementState()
+_ = mutedAnnouncements.observe(music, enabled: false)
+expect(mutedAnnouncements.observe(nextTrack, enabled: false) == nil, "Disabled notifications must suppress new-track announcements")
+expect(mutedAnnouncements.observe(nextTrack, enabled: true) == nil, "Re-enabling must not replay a track seen while disabled")
+expect(mutedAnnouncements.observe(music, enabled: true) != nil, "A subsequent track change must announce after re-enabling")
+
 print("Passed \(assertions) model assertions; no app or media service was launched.")

@@ -421,6 +421,7 @@ final class TouchBarView: NSObject {
 
     func setPresented(_ visible: Bool) {
         presented = visible
+        if !visible { closeScrubber() }
         updateProgressAnimation()
         titleLabel.animationsEnabled = visible && !scrubOpen
         scheduleSongSizing()

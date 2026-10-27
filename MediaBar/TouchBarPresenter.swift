@@ -9,11 +9,13 @@ final class TouchBarPresenter {
     private var pending: DispatchWorkItem?
     private var stopped = true
     private var presented = false
+    private var enabled = true
     private let logger = Logger(subsystem: "com.sezerbudak.MediaBar", category: "TouchBar")
 
     init(view: TouchBarView) { self.view = view }
 
     func start() {
+        guard stopped else { return }
         stopped = false
         for name in [NSWorkspace.didActivateApplicationNotification, NSWorkspace.didWakeNotification,
                      NSWorkspace.screensDidWakeNotification, NSWorkspace.activeSpaceDidChangeNotification,
@@ -36,15 +38,30 @@ final class TouchBarPresenter {
     }
 
     private func schedule() {
+        guard !stopped, enabled else { return }
         pending?.cancel()
         let work = DispatchWorkItem { [weak self] in
-            guard let self, !self.stopped else { return }
+            guard let self, !self.stopped, self.enabled else { return }
             self.presented = MBPresentTouchBar(self.view.bar)
             self.view.setPresented(self.presented)
             if !self.presented { self.logger.error("System Touch Bar presentation API unavailable") }
         }
         pending = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
+    }
+
+    func setEnabled(_ enabled: Bool) {
+        guard self.enabled != enabled else { return }
+        self.enabled = enabled
+        if enabled {
+            schedule()
+        } else {
+            pending?.cancel()
+            onContextChange?()
+            if presented { MBDismissTouchBar(view.bar) }
+            presented = false
+            view.setPresented(false)
+        }
     }
 
     func stop() {

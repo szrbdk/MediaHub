@@ -5,6 +5,9 @@ final class MediaController {
     let view = TouchBarView()
     private let client = MediaClient()
     private let music = MusicAutomation()
+    private let preferences = FeaturePreferences()
+    var notificationsEnabled: Bool { preferences.isEnabled(.notifications) }
+    var touchBarEnabled: Bool { preferences.isEnabled(.touchBar) }
     private let trackNotifications = TrackNotificationPresenter()
     private var trackAnnouncements = TrackAnnouncementState()
     private lazy var presenter = TouchBarPresenter(view: view)
@@ -30,12 +33,25 @@ final class MediaController {
         stopped = false
         view.onAction = { [weak self] in self?.handle($0) }
         presenter.onContextChange = { [weak self] in self?.endSeeking() }
+        presenter.setEnabled(touchBarEnabled)
         presenter.start()
+        trackNotifications.setEnabled(notificationsEnabled)
         trackNotifications.start()
         pollTimer = timer(interval: 0.5) { [weak self] in self?.readState() }
         progressTimer = timer(interval: 0.5) { [weak self] in self?.view.refreshProgress() }
         favoriteTimer = timer(interval: 5) { [weak self] in self?.readFavorite() }
         readState()
+    }
+
+    func setNotificationsEnabled(_ enabled: Bool) {
+        preferences.setEnabled(enabled, for: .notifications)
+        trackNotifications.setEnabled(enabled)
+    }
+
+    func setTouchBarEnabled(_ enabled: Bool) {
+        preferences.setEnabled(enabled, for: .touchBar)
+        presenter.setEnabled(enabled)
+        if enabled { readFavorite() }
     }
 
     private func timer(interval: Double, action: @escaping () -> Void) -> Timer {
@@ -80,7 +96,7 @@ final class MediaController {
             self.state = next
             self.view.render(next)
             if payload != nil {
-                if let announcement = self.trackAnnouncements.observe(next) {
+                if let announcement = self.trackAnnouncements.observe(next, enabled: self.notificationsEnabled) {
                     self.trackNotifications.show(announcement)
                 } else {
                     self.trackNotifications.updateContent(for: next)
@@ -150,7 +166,7 @@ final class MediaController {
     }
 
     private func readFavorite() {
-        guard !stopped, state.hasMedia, state.isMusic, !favoriteReadBusy,
+        guard !stopped, touchBarEnabled, state.hasMedia, state.isMusic, !favoriteReadBusy,
               favoriteWriteRevision != revision else { return }
         favoriteReadBusy = true
         let key = state.trackKey

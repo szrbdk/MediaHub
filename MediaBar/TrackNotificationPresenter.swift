@@ -14,6 +14,12 @@ final class TrackNotificationPresenter {
     private var distributedObservers: [NSObjectProtocol] = []
     private var screenObserver: NSObjectProtocol?
     private var currentAnnouncement: TrackAnnouncement?
+    private var enabled = true
+
+    func setEnabled(_ enabled: Bool) {
+        self.enabled = enabled
+        if !enabled { dismiss(animated: false) }
+    }
 
     func start() {
         let workspace = NSWorkspace.shared.notificationCenter
@@ -42,7 +48,7 @@ final class TrackNotificationPresenter {
     }
 
     func show(_ announcement: TrackAnnouncement) {
-        guard !suspended else { return }
+        guard enabled, !suspended else { return }
         currentAnnouncement = announcement
         generation += 1
         let expectedGeneration = generation
@@ -50,7 +56,7 @@ final class TrackNotificationPresenter {
         pendingDismiss?.cancel()
         // Replace bursts of track changes rather than queuing obsolete banners.
         let work = DispatchWorkItem { [weak self] in
-            guard let self, self.generation == expectedGeneration, !self.suspended,
+            guard let self, self.enabled, self.generation == expectedGeneration, !self.suspended,
                   let latest = self.currentAnnouncement else { return }
             self.present(latest)
         }
@@ -59,6 +65,7 @@ final class TrackNotificationPresenter {
     }
 
     func updateContent(for state: MediaState) {
+        guard enabled else { return }
         let updated = TrackAnnouncement(state: state)
         guard let currentAnnouncement, updated.hasSameTrack(as: currentAnnouncement),
               updated != currentAnnouncement else { return }
@@ -69,6 +76,7 @@ final class TrackNotificationPresenter {
     }
 
     private func present(_ announcement: TrackAnnouncement) {
+        guard enabled, !suspended else { return }
         guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
         let width = min(400, screen.frame.width - 32)
         // Keep the floating card below a physical notch, with no connecting stem.

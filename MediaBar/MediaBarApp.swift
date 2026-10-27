@@ -32,12 +32,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         heading.isEnabled = false
         menu.addItem(heading)
         menu.addItem(.separator())
+        let notifications = NSMenuItem(title: "Bildirimler", action: #selector(toggleNotifications(_:)), keyEquivalent: "")
+        notifications.target = self
+        notifications.state = controller.notificationsEnabled ? .on : .off
+        menu.addItem(notifications)
+        let touchBar = NSMenuItem(title: "Touch Bar", action: #selector(toggleTouchBar(_:)), keyEquivalent: "")
+        touchBar.target = self
+        touchBar.state = controller.touchBarEnabled ? .on : .off
+        menu.addItem(touchBar)
+        menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApp
         menu.addItem(quit)
         item.menu = menu
         statusItem = item
         controller.start()
+    }
+
+    @objc private func toggleNotifications(_ sender: NSMenuItem) {
+        controller.setNotificationsEnabled(!controller.notificationsEnabled)
+        sender.state = controller.notificationsEnabled ? .on : .off
+    }
+
+    @objc private func toggleTouchBar(_ sender: NSMenuItem) {
+        controller.setTouchBarEnabled(!controller.touchBarEnabled)
+        sender.state = controller.touchBarEnabled ? .on : .off
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

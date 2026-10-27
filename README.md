@@ -2,7 +2,9 @@
 
 Bu Mac için geliştirilen, Swift/AppKit ve Objective-C ile yazılmış Touch Bar medya kontrol uygulaması. Xcode 27.1 ile derlenir; hedef macOS 27.0’dır.
 
-Uygulama normal başlatıldığında Touch Bar panelini gösterir ve uygulamalar arasında geçişte korur. Menü çubuğundaki dalga simgesinin menüsünde **MediaBar** başlığı, bir ayırıcı ve **Quit** eylemi bulunur. Simgenin araç ipucu da uygulamanın adını gösterir. Ana pencere, Dock simgesi, otomatik başlatma ve ayarlar yoktur; parça değişimlerinde kısa süreli bir bildirim paneli gösterilir. Çıkışta paneller kapatılır, bekleyen sarma bitiş komutları gönderilir ve XPC bağlantısı kapatılır.
+Uygulama normal başlatıldığında kayıtlı tercihlere göre Touch Bar panelini ve parça bildirimlerini etkinleştirir. Menü çubuğundaki dalga simgesinin menüsünde **MediaBar** başlığı, **Bildirimler** ve **Touch Bar** aç/kapat seçenekleri ve **Quit** bulunur. Açık seçenekler işaretlidir. Seçimler UserDefaults ile kaydedilir ve sonraki açılışta korunur; kayıtlı tercih yoksa iki özellik de açıktır. Simgenin araç ipucu uygulamanın adını gösterir. Ana pencere, Dock simgesi, otomatik başlatma veya ayrı ayarlar penceresi yoktur. Çıkışta paneller kapatılır, bekleyen sarma bitiş komutları gönderilir ve XPC bağlantısı kapatılır.
+
+Bildirimleri kapatmak görünen kartı hemen gizler ve bekleyen kartları iptal eder. Yeniden açıldığında yalnızca sonraki parça değişimleri duyurulur. Touch Bar’ı kapatmak mevcut sarmayı sonlandırır ve sistemin normal Touch Bar görünümünü geri getirir; yeniden açmak paneli tekrar gösterir. İki seçenek birbirinden bağımsızdır.
 
 ## Yapı
 
@@ -42,7 +44,7 @@ Uygulama simgesinin PNG boyutları ve menü çubuğunun tek renkli vektör PDF s
 xcodebuild -project MediaBar.xcodeproj -scheme MediaBar -configuration Debug -derivedDataPath build/Verification CODE_SIGN_IDENTITY=- build
 xcodebuild -project MediaBar.xcodeproj -scheme MediaBar -configuration Release -derivedDataPath build/Verification CODE_SIGN_IDENTITY=- build
 
-xcrun swiftc -module-cache-path build/ModuleCache MediaBar/Models/PlaybackTimeline.swift MediaBar/Models/FavoriteRequestState.swift MediaBar/Models/SeekRequestState.swift MediaBar/Models/MediaState.swift MediaBar/Models/TrackAnnouncementState.swift Tests/main.swift -o build/MediaBarModelTests
+xcrun swiftc -module-cache-path build/ModuleCache MediaBar/Models/PlaybackTimeline.swift MediaBar/Models/FavoriteRequestState.swift MediaBar/Models/SeekRequestState.swift MediaBar/Models/MediaState.swift MediaBar/Models/TrackAnnouncementState.swift MediaBar/Models/FeaturePreferences.swift Tests/main.swift -o build/MediaBarModelTests
 build/MediaBarModelTests
 ```
 
