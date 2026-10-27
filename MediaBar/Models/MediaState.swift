@@ -9,6 +9,7 @@ struct MediaState {
     var timeline = PlaybackTimeline()
     var favorite = false
     var favoritePending = false
+    var seekPending = false
     var hasMedia: Bool { !title.isEmpty }
     var isMusic: Bool { bundleIdentifier == "com.apple.Music" }
     var isPodcast: Bool { bundleIdentifier == "com.apple.podcasts" }

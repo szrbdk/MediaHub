@@ -19,8 +19,6 @@ final class TouchBarView: NSObject {
     private let seekSurface = SeekSurface(frame: .zero)
     private let seekTimeBadge = SeekTimeBadge(frame: .zero)
     private var seekWidth: NSLayoutConstraint!
-    private var pendingSeekPosition: Double?
-    private var pendingSeekBeganAt: Double = 0
     private var scrubProgressTimer: Timer?
     private var lastScrubFrameAt: Double?
     private var backButton: NSButton!
@@ -164,19 +162,15 @@ final class TouchBarView: NSObject {
         seekSurface.wantsLayer = true
         seekSurface.onPreview = { [weak self] fraction in
             guard let self, self.scrubOpen, !self.scrubClosing, self.scrubTrackKey == self.state.trackKey else { return }
-            self.pendingSeekPosition = nil
             self.updateSeekTime(position: fraction * self.state.timeline.duration, emphasized: true)
         }
         seekSurface.onCommit = { [weak self] fraction in
             guard let self, self.scrubOpen, !self.scrubClosing, self.state.timeline.isValid,
                   self.scrubTrackKey == self.state.trackKey else { return }
-            self.pendingSeekPosition = fraction * self.state.timeline.duration
-            self.pendingSeekBeganAt = CACurrentMediaTime()
             self.updateSeekTime(position: fraction * self.state.timeline.duration, emphasized: true)
             self.onAction?(.seek(fraction: fraction, trackKey: self.scrubTrackKey))
         }
         seekSurface.onCancel = { [weak self] in
-            self?.pendingSeekPosition = nil
             self?.refreshProgress()
         }
         seekSurface.isHidden = true
@@ -199,10 +193,6 @@ final class TouchBarView: NSObject {
         let animateTitleChange = state.hasMedia && newState.hasMedia && newState.trackKey != state.trackKey
         if newState.trackKey != state.trackKey || !newState.timeline.isValid { closeScrubber() }
         state = newState
-        if let pendingSeekPosition,
-           abs(state.timeline.position(at: Date().timeIntervalSince1970) - pendingSeekPosition) < 1.5 {
-            self.pendingSeekPosition = nil
-        }
         [backButton, playButton, nextButton].forEach { $0?.isEnabled = state.hasMedia }
         playButton.image = NSImage(systemSymbolName: state.playing ? "pause.fill" : "play.fill", accessibilityDescription: "Oynat / duraklat")
         backButton.image = NSImage(systemSymbolName: state.isPodcast ? "gobackward.15" : "backward.end.fill", accessibilityDescription: state.isPodcast ? "15 saniye geri" : "Önceki")
@@ -259,14 +249,9 @@ final class TouchBarView: NSObject {
     private func refreshSeekProgress() {
         guard scrubOpen, !scrubClosing, state.timeline.isValid, !seekSurface.isDragging else { return }
         let now = CACurrentMediaTime()
-        // Keep the released target visible until a matching state arrives.
-        // A failed/unsupported seek falls back to the player after 3 seconds.
-        if pendingSeekPosition != nil && now - pendingSeekBeganAt >= 3 {
-            pendingSeekPosition = nil
-        }
-        let position = pendingSeekPosition ?? state.timeline.position(at: Date().timeIntervalSince1970)
+        let position = state.timeline.position(at: Date().timeIntervalSince1970)
         let target = position / state.timeline.duration
-        let canSmooth = presented && state.timeline.isAdvancing && pendingSeekPosition == nil
+        let canSmooth = presented && state.timeline.isAdvancing
             && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         if canSmooth, let lastScrubFrameAt, now - lastScrubFrameAt < 0.2 {
             // A short, time-based filter absorbs small metadata corrections.
@@ -277,12 +262,12 @@ final class TouchBarView: NSObject {
             seekSurface.fraction = target
         }
         lastScrubFrameAt = now
-        updateSeekTime(position: position, emphasized: pendingSeekPosition != nil)
+        updateSeekTime(position: position, emphasized: state.seekPending)
     }
 
     private func updateScrubProgressAnimation() {
         let shouldAnimate = presented && scrubOpen && !scrubClosing
-            && state.timeline.isAdvancing && pendingSeekPosition == nil
+            && state.timeline.isAdvancing
             && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         guard shouldAnimate else {
             scrubProgressTimer?.invalidate()
@@ -327,7 +312,6 @@ final class TouchBarView: NSObject {
         if animated, presented, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             scrubClosing = true
             updateScrubProgressAnimation()
-            pendingSeekPosition = nil
             seekSurface.cancelInteraction()
             animateScrubViews([(seekSurface, 16), (expandedTime, 6)], appearing: false, duration: 0.16)
             let generation = scrubCloseGeneration
@@ -344,7 +328,6 @@ final class TouchBarView: NSObject {
         scrubClosing = false
         scrubOpen = false
         updateScrubProgressAnimation()
-        pendingSeekPosition = nil
         seekSurface.cancelInteraction()
         updateModeViews()
     }
@@ -692,11 +675,13 @@ final class SeekSurface: NSView, NSGestureRecognizerDelegate {
             onPreview?(fraction)
         case .ended:
             isDragging = false
-            fraction = value(recognizer)
+            // Touch-up may no longer report the last finger location. Commit
+            // the final preview instead of briefly moving to a spurious value.
             onCommit?(fraction)
         case .cancelled, .failed:
+            let wasDragging = isDragging
             isDragging = false
-            onCancel?()
+            if wasDragging { onCancel?() }
         default: break
         }
     }

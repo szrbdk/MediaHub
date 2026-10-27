@@ -30,7 +30,7 @@ MediaRemote özel API bildirimleri `ungive/mediaremote-adapter` projesinin `0e82
 xcodebuild -project MediaBar.xcodeproj -scheme MediaBar -configuration Debug -derivedDataPath build/Verification CODE_SIGN_IDENTITY=- build
 xcodebuild -project MediaBar.xcodeproj -scheme MediaBar -configuration Release -derivedDataPath build/Verification CODE_SIGN_IDENTITY=- build
 
-xcrun swiftc -module-cache-path build/ModuleCache MediaBar/Models/PlaybackTimeline.swift MediaBar/Models/FavoriteRequestState.swift MediaBar/Models/MediaState.swift Tests/main.swift -o build/MediaBarModelTests
+xcrun swiftc -module-cache-path build/ModuleCache MediaBar/Models/PlaybackTimeline.swift MediaBar/Models/FavoriteRequestState.swift MediaBar/Models/SeekRequestState.swift MediaBar/Models/MediaState.swift Tests/main.swift -o build/MediaBarModelTests
 build/MediaBarModelTests
 ```
 

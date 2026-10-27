@@ -8,6 +8,8 @@ final class MediaController {
     private lazy var presenter = TouchBarPresenter(view: view)
     private var state = MediaState()
     private var favoriteRequest = FavoriteRequestState()
+    private var seekRequest = SeekRequestState()
+    private var seekGeneration = 0
     private var favoriteReadBusy = false
     private var favoriteWriteRevision: Int?
     private var pollTimer: Timer?
@@ -43,9 +45,13 @@ final class MediaController {
     private func readState() {
         guard !stopped, !readBusy, Date() >= retryAfter else { return }
         readBusy = true
+        let observedSeekGeneration = seekGeneration
         client.read { [weak self] payload in
             guard let self, !self.stopped else { return }
             self.readBusy = false
+            // A snapshot requested before the latest seek can arrive after its
+            // command reply. Discard it before it can acknowledge the new target.
+            guard observedSeekGeneration == self.seekGeneration else { return }
             if payload == nil {
                 self.retryCount = min(10, self.retryCount + 1)
                 self.retryAfter = Date().addingTimeInterval(Double(self.retryCount * 3))
@@ -57,6 +63,7 @@ final class MediaController {
             let changed = next.trackKey != self.state.trackKey
             if changed || !next.hasMedia || !next.timeline.isValid { self.endSeeking() }
             if changed {
+                self.seekRequest.reset()
                 self.revision += 1
                 self.music.cancelPendingRequests()
                 self.favoriteWriteRevision = nil
@@ -65,6 +72,8 @@ final class MediaController {
                 next.favorite = self.state.favorite
                 next.favoritePending = self.favoriteRequest.isPending
             }
+            next.timeline = self.seekRequest.receive(next.timeline, now: Date().timeIntervalSince1970)
+            next.seekPending = self.seekRequest.isPending
             self.state = next
             self.view.render(next)
             if changed { self.readFavorite() }
@@ -89,10 +98,19 @@ final class MediaController {
             guard key == state.trackKey, let micros = state.timeline.seekMicroseconds(fraction: fraction) else { return }
             let expectedRevision = revision
             let seconds = Double(micros) / 1_000_000
+            seekGeneration += 1
+            let request = seekRequest.begin(position: seconds, timeline: state.timeline, now: Date().timeIntervalSince1970)
+            state.timeline = seekRequest.displayedTimeline(fallback: state.timeline)
+            state.seekPending = true
+            view.render(state)
             client.seek(seconds: seconds) { [weak self] success in
-                guard let self, !self.stopped, success, self.revision == expectedRevision else { return }
-                self.state.timeline.elapsed = seconds
-                self.state.timeline.timestamp = Date().timeIntervalSince1970
+                guard let self, !self.stopped, self.revision == expectedRevision,
+                      self.seekRequest.requestID == request else { return }
+                if let fallback = self.seekRequest.complete(request, success: success) {
+                    self.state.timeline = fallback
+                }
+                self.state.seekPending = self.seekRequest.isPending
+                if !success { self.logger.error("Seek command failed") }
                 self.view.render(self.state)
             }
         case .openPlayer:
@@ -165,6 +183,7 @@ final class MediaController {
     func stop(completion: @escaping () -> Void) {
         stopped = true
         revision += 1
+        seekRequest.reset()
         music.cancelPendingRequests()
         [pollTimer, progressTimer, favoriteTimer].forEach { $0?.invalidate() }
         presenter.stop()
