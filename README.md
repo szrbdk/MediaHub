@@ -2,7 +2,7 @@
 
 Bu Mac için geliştirilen, Swift/AppKit ve Objective-C ile yazılmış Touch Bar medya kontrol uygulaması. Xcode 27.1 ile derlenir; hedef macOS 27.0’dır.
 
-Uygulama normal başlatıldığında Touch Bar panelini gösterir ve uygulamalar arasında geçişte korur. Menü çubuğundaki nota simgesinde yalnızca **Quit** bulunur. Pencere, Dock simgesi, otomatik başlatma ve ayarlar yoktur. Çıkışta panel kapatılır, bekleyen sarma bitiş komutları gönderilir ve XPC bağlantısı kapatılır.
+Uygulama normal başlatıldığında Touch Bar panelini gösterir ve uygulamalar arasında geçişte korur. Menü çubuğundaki dalga simgesinin menüsünde **MediaBar** başlığı, bir ayırıcı ve **Quit** eylemi bulunur. Simgenin araç ipucu da uygulamanın adını gösterir. Pencere, Dock simgesi, otomatik başlatma ve ayarlar yoktur. Çıkışta panel kapatılır, bekleyen sarma bitiş komutları gönderilir ve XPC bağlantısı kapatılır.
 
 ## Yapı
 
@@ -25,6 +25,8 @@ App Sandbox kapalıdır. Music’in favori özelliği ilk kullanımda macOS otom
 MediaRemote özel API bildirimleri `ungive/mediaremote-adapter` projesinin `0e82bf1c44ec39554fbfc402ec88a48c6ae2a0fd` sürümünden alınmıştır. BSD-3-Clause lisansı `MediaBar/Resources/MediaRemoteAdapter-LICENSE.txt` içinde tutulur ve uygulamaya kopyalanır. Eski TouchBar projesi değiştirilmez.
 
 ## Uygulamayı açmadan doğrulama
+
+Uygulama simgesinin PNG boyutları ve menü çubuğunun tek renkli vektör PDF simgesi `Assets.xcassets` içinde bulunur. Tasarımın Swift/CoreGraphics kaynağı `Tools/GenerateIcons.swift` dosyasıdır. Yeniden üretmek için `xcrun swift -module-cache-path build/ModuleCache Tools/GenerateIcons.swift` kullanılabilir; bu işlem uygulamayı açmaz.
 
 ```sh
 xcodebuild -project MediaBar.xcodeproj -scheme MediaBar -configuration Debug -derivedDataPath build/Verification CODE_SIGN_IDENTITY=- build
