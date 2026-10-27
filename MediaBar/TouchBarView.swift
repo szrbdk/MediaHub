@@ -187,6 +187,7 @@ final class TouchBarView: NSObject {
     }
 
     func render(_ newState: MediaState) {
+        let animateTitleChange = state.hasMedia && newState.hasMedia && newState.trackKey != state.trackKey
         if newState.trackKey != state.trackKey || !newState.timeline.isValid { closeScrubber() }
         state = newState
         [backButton, playButton, nextButton].forEach { $0?.isEnabled = state.hasMedia }
@@ -197,13 +198,14 @@ final class TouchBarView: NSObject {
         favoriteButton.isEnabled = state.hasMedia && state.isMusic && !state.favoritePending
         favoriteButton.image = NSImage(systemSymbolName: state.favorite ? "star.fill" : "star", accessibilityDescription: state.favorite ? "Favorilere eklendi" : "Favorilere ekle")
         favoriteButton.toolTip = state.favoritePending ? "Music’ten onay bekleniyor" : state.favorite ? "Favorilerde" : "Favorilere ekle"
-        renderTitle()
+        renderTitle(animateChange: animateTitleChange)
         refreshProgress()
         scheduleSongSizing()
     }
 
-    private func renderTitle() {
+    private func renderTitle(animateChange: Bool) {
         guard state.hasMedia else {
+            titleLabel.cancelTransition()
             titleLabel.attributedStringValue = NSAttributedString(string: "♫  Çalan içerik bekleniyor", attributes: [
                 .font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor(white: 0.55, alpha: 1)])
             titleLabel.toolTip = "Çalan içerik bekleniyor"
@@ -223,7 +225,7 @@ final class TouchBarView: NSObject {
                 .font: NSFont.systemFont(ofSize: 12), .foregroundColor: NSColor(white: 0.66, alpha: 1)]))
         }
         value.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: value.length))
-        titleLabel.attributedStringValue = value
+        titleLabel.setText(value, animateChange: animateChange)
         titleLabel.toolTip = state.artist.isEmpty ? state.title : "\(state.title) — \(state.artist)"
     }
 
@@ -357,6 +359,37 @@ final class MarqueeLabel: NSTextField {
     private var beganAt = CACurrentMediaTime()
     private var offset: CGFloat = 0
     private var lastWidth: CGFloat = 0
+    // Faster than the normal 22 pt/s marquee. Both panels move together.
+    private let transitionDuration: Double = 0.35
+    private var outgoingImage: NSImage?
+    private var transitionBeganAt: Double = 0
+
+    func setText(_ text: NSAttributedString, animateChange: Bool) {
+        var snapshot: NSImage?
+        if animateChange, animationsEnabled, bounds.width > 0, bounds.height > 0,
+           !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+           let bitmap = bitmapImageRepForCachingDisplay(in: bounds) {
+            // Capture the visible marquee position (or an interrupted slide),
+            // rather than restarting the outgoing text at its beginning.
+            cacheDisplay(in: bounds, to: bitmap)
+            let image = NSImage(size: bounds.size)
+            image.addRepresentation(bitmap)
+            snapshot = image
+        }
+        attributedStringValue = text
+        if let snapshot {
+            outgoingImage = snapshot
+            transitionBeganAt = CACurrentMediaTime()
+            offset = 0
+            updateAnimation()
+        }
+    }
+
+    func cancelTransition() {
+        outgoingImage = nil
+        beganAt = CACurrentMediaTime()
+        offset = 0
+    }
 
     override var attributedStringValue: NSAttributedString {
         get { super.attributedStringValue }
@@ -381,13 +414,23 @@ final class MarqueeLabel: NSTextField {
     private func updateAnimation() {
         animationTimer?.invalidate()
         animationTimer = nil
-        guard animationsEnabled, overflow > 0, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+        guard animationsEnabled, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            cancelTransition()
             offset = 0
             needsDisplay = true
             return
         }
-        let timer = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
+        guard outgoingImage != nil || overflow > 0 else { needsDisplay = true; return }
+        let timer = Timer(timeInterval: outgoingImage == nil ? 1.0 / 30 : 1.0 / 60, repeats: true) { [weak self] _ in
             guard let self else { return }
+            if self.outgoingImage != nil {
+                if CACurrentMediaTime() - self.transitionBeganAt >= self.transitionDuration {
+                    self.cancelTransition()
+                    self.updateAnimation()
+                }
+                self.needsDisplay = true
+                return
+            }
             let distance = max(0, self.attributedStringValue.size().width - self.bounds.width + 4)
             let travel = Double(distance) / 22
             let cycle = 2 + travel + 1.5 + travel
@@ -404,6 +447,26 @@ final class MarqueeLabel: NSTextField {
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        if let outgoingImage, animationsEnabled, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            let phase = min(1, max(0, (CACurrentMediaTime() - transitionBeganAt) / transitionDuration))
+            let eased = CGFloat(phase * phase * (3 - 2 * phase))
+            NSGraphicsContext.saveGraphicsState()
+            bounds.clip()
+            outgoingImage.draw(in: bounds.offsetBy(dx: -bounds.width * eased, dy: 0),
+                               from: .zero, operation: .sourceOver, fraction: 1,
+                               respectFlipped: true, hints: nil)
+            // Let NSTextField draw the incoming panel exactly as it will look
+            // at rest, including its normal truncation and baseline.
+            NSGraphicsContext.saveGraphicsState()
+            let translation = NSAffineTransform()
+            translation.translateX(by: bounds.width * (1 - eased), yBy: 0)
+            translation.concat()
+            bounds.clip()
+            super.draw(bounds)
+            NSGraphicsContext.restoreGraphicsState()
+            NSGraphicsContext.restoreGraphicsState()
+            return
+        }
         guard overflow > 0, animationsEnabled, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
             super.draw(dirtyRect)
             return
