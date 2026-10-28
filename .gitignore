@@ -20,3 +20,6 @@ DerivedData/
 # Swift Package Manager local artifacts
 .build/
 .swiftpm/
+
+# Local development instructions
+/AGENTS.md
