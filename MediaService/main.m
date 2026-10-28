@@ -95,6 +95,19 @@
         [keys enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSString *source, BOOL *stop) {
             id value = info[source];
             if ([value isKindOfClass:NSString.class] || [value isKindOfClass:NSNumber.class]) snapshot[key] = value;
+            if ([key isEqualToString:@"artist"] && [value isKindOfClass:NSArray.class] && [value count]) {
+                // Only expose genuine source arrays. Never split an artist string.
+                BOOL valid = YES;
+                NSMutableArray<NSString *> *names = [NSMutableArray array];
+                for (id name in value) {
+                    if (![name isKindOfClass:NSString.class]) { valid = NO; break; }
+                    if ([[name stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet] length]) [names addObject:name];
+                }
+                if (valid && names.count) {
+                    snapshot[@"artistNames"] = names;
+                    snapshot[@"artist"] = [names componentsJoinedByString:@" & "];
+                }
+            }
         }];
         NSData *artwork = [self artworkForInfo:info];
         if (artwork) snapshot[@"artworkData"] = artwork;

@@ -11,6 +11,7 @@ final class FeaturePreferences {
     enum Feature: String {
         case notifications = "notificationsEnabled"
         case touchBar = "touchBarEnabled"
+        case autoSkip = "autoSkipEnabled"
     }
 
     private let store: PreferenceStore

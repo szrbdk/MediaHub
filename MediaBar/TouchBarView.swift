@@ -9,6 +9,14 @@ final class TouchBarView: NSObject {
     private var state = MediaState()
     private var presented = false
     private var scrubOpen = false
+    private var detailsOpen = false
+    private let detailsTitle = MarqueeLabel(labelWithString: "")
+    private var detailsControls: NSStackView!
+    private var detailsTrailing: NSStackView!
+    private var detailsInfo: NSView!
+    private var detailsWidth: NSLayoutConstraint!
+    private var blockSongButton: NSButton!
+    private var blockArtistButton: NSButton!
     private var scrubClosing = false
     private var scrubCloseWork: DispatchWorkItem?
     private var scrubCloseGeneration = 0
@@ -81,7 +89,7 @@ final class TouchBarView: NSObject {
         ])
         progressView.setAccessibilityLabel("Oynatma ilerlemesi")
         timelineView = timelineStack
-        let trailing = NSStackView(views: [favoriteButton, timelineStack])
+        let trailing = NSStackView(views: [timelineStack])
         trailing.spacing = 7
         trailing.alignment = .centerY
         normalTrailing = trailing
@@ -97,6 +105,7 @@ final class TouchBarView: NSObject {
         bar.escapeKeyReplacementItemIdentifier = escape.identifier
         bar.defaultItemIdentifiers = [controls.identifier, .flexibleSpace, timelineItem.identifier]
         makeScrubBar()
+        makeDetailsBar()
         render(MediaState())
     }
 
@@ -145,9 +154,9 @@ final class TouchBarView: NSObject {
                 self?.onAction?(began ? .beginSeeking(forward: forward) : .endSeeking)
             }
         }
-        let openPlayer = NSClickGestureRecognizer(target: self, action: #selector(openPlayer))
-        openPlayer.allowedTouchTypes = .direct
-        text.addGestureRecognizer(openPlayer)
+        let showDetails = NSClickGestureRecognizer(target: self, action: #selector(toggleDetails))
+        showDetails.allowedTouchTypes = .direct
+        text.addGestureRecognizer(showDetails)
         favoriteButton = button("star", "Favorilere ekle", #selector(addFavorite))
         let stack = NSStackView(views: [backButton, playButton, nextButton, text])
         text.setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -192,10 +201,58 @@ final class TouchBarView: NSObject {
         rightSlot.addArrangedSubview(target)
     }
 
+    private func makeDetailsBar() {
+        detailsTitle.lineBreakMode = .byTruncatingTail
+        detailsTitle.maximumNumberOfLines = 1
+        detailsTitle.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let info = NSStackView(views: [detailsTitle])
+        info.alignment = .centerY
+        info.edgeInsets = NSEdgeInsets(top: 0, left: 10, bottom: 0, right: 10)
+        info.wantsLayer = true
+        info.layer?.backgroundColor = NSColor(white: 0.06, alpha: 1).cgColor
+        info.layer?.cornerRadius = 7
+        info.heightAnchor.constraint(equalToConstant: 28).isActive = true
+        detailsTitle.translatesAutoresizingMaskIntoConstraints = false
+        detailsTitle.widthAnchor.constraint(equalTo: info.widthAnchor, constant: -20).isActive = true
+        detailsWidth = info.widthAnchor.constraint(equalToConstant: 280)
+        detailsWidth.priority = NSLayoutConstraint.Priority(999)
+        detailsWidth.isActive = true
+        detailsInfo = info
+        let close = NSClickGestureRecognizer(target: self, action: #selector(toggleDetails))
+        close.allowedTouchTypes = .direct
+        info.addGestureRecognizer(close)
+        detailsControls = NSStackView(views: [favoriteButton, info])
+        detailsControls.spacing = 7
+        detailsControls.alignment = .centerY
+        detailsControls.detachesHiddenViews = true
+        detailsControls.isHidden = true
+        leftSlot.addArrangedSubview(detailsControls)
+        blockSongButton = blacklistButton("Şarkıyı engelle", symbol: "music.note", width: 106, action: #selector(toggleSongBlacklist))
+        blockArtistButton = blacklistButton("Sanatçıyı engelle", symbol: "person.fill", width: 116, action: #selector(toggleArtistBlacklist))
+        detailsTrailing = NSStackView(views: [blockSongButton, blockArtistButton])
+        detailsTrailing.spacing = 7
+        detailsTrailing.alignment = .centerY
+        detailsTrailing.isHidden = true
+        rightSlot.addArrangedSubview(detailsTrailing)
+    }
+
+    private func blacklistButton(_ title: String, symbol: String, width: CGFloat, action: Selector) -> NSButton {
+        let button = NSButton(title: title, image: NSImage(systemSymbolName: symbol, accessibilityDescription: nil)!,
+                              target: self, action: action)
+        button.bezelStyle = .rounded
+        button.imagePosition = .imageLeading
+        button.imageScaling = .scaleProportionallyDown
+        button.font = .systemFont(ofSize: 10.5, weight: .medium)
+        button.heightAnchor.constraint(equalToConstant: 28).isActive = true
+        button.widthAnchor.constraint(equalToConstant: width).isActive = true
+        return button
+    }
+
     func render(_ newState: MediaState) {
         let animateTitleChange = state.hasMedia && newState.hasMedia && newState.trackKey != state.trackKey
         if newState.trackKey != state.trackKey { lastCompactFrameAt = nil }
         if newState.trackKey != state.trackKey || !newState.timeline.isValid { closeScrubber() }
+        if newState.trackKey != state.trackKey || !newState.hasMedia { closeDetails() }
         state = newState
         [backButton, playButton, nextButton].forEach { $0?.isEnabled = state.hasMedia }
         playButton.image = NSImage(systemSymbolName: state.playing ? "pause.fill" : "play.fill", accessibilityDescription: "Oynat / duraklat")
@@ -205,7 +262,17 @@ final class TouchBarView: NSObject {
         favoriteButton.isEnabled = state.hasMedia && state.isMusic && !state.favoritePending
         favoriteButton.image = NSImage(systemSymbolName: state.favorite ? "star.fill" : "star", accessibilityDescription: state.favorite ? "Favorilere eklendi" : "Favorilere ekle")
         favoriteButton.toolTip = state.favoritePending ? "Music’ten onay bekleniyor" : state.favorite ? "Favorilerde" : "Favorilere ekle"
+        blockSongButton.isEnabled = state.canEditBlacklist && state.songBlacklistEntry != nil
+        blockArtistButton.isEnabled = state.canEditBlacklist && state.primaryArtistBlacklistEntry != nil
+        blockSongButton.title = state.songBlacklisted ? "Şarkı engelli" : "Şarkıyı engelle"
+        blockArtistButton.title = state.primaryArtistBlacklisted ? "Sanatçı engelli" : "Sanatçıyı engelle"
+        blockSongButton.contentTintColor = state.songBlacklisted ? .systemPink : .white
+        blockArtistButton.contentTintColor = state.primaryArtistBlacklisted ? .systemPink : .white
+        blockSongButton.toolTip = state.songBlacklisted ? "Bu şarkıyı karalisteden kaldır" : "Bu şarkıyı karalisteye ekle"
+        let artistName = state.artistNames.first ?? state.artistText
+        blockArtistButton.toolTip = "\(state.primaryArtistBlacklisted ? "Karalisteden kaldır" : "Karalisteye ekle"): \(artistName)"
         renderTitle(animateChange: animateTitleChange)
+        detailsTitle.setText(titleLabel.attributedStringValue, animateChange: false)
         refreshProgress()
         scheduleSongSizing()
     }
@@ -233,7 +300,9 @@ final class TouchBarView: NSObject {
         }
         value.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: value.length))
         titleLabel.setText(value, animateChange: animateChange)
-        titleLabel.toolTip = state.artist.isEmpty ? state.title : "\(state.title) — \(state.artist)"
+        let trackDescription = state.artist.isEmpty ? state.title : "\(state.title) — \(state.artist)"
+        titleLabel.toolTip = "\(trackDescription) · Şarkı işlemlerini aç"
+        detailsTitle.toolTip = "\(trackDescription) · Ana görünüme dön"
     }
 
     func refreshProgress() {
@@ -306,7 +375,7 @@ final class TouchBarView: NSObject {
     }
 
     private func updateProgressAnimation() {
-        let shouldAnimate = presented && !scrubClosing
+        let shouldAnimate = presented && !scrubClosing && !detailsOpen
             && state.timeline.isAdvancing
             && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         guard shouldAnimate else {
@@ -342,6 +411,7 @@ final class TouchBarView: NSObject {
         guard recognizer.state == .ended, !scrubClosing else { return }
         if scrubOpen { closeScrubber(animated: true); return }
         guard state.timeline.isValid else { return }
+        closeDetails()
         onAction?(.endSeeking)
         scrubTrackKey = state.trackKey
         scrubOpen = true
@@ -377,24 +447,31 @@ final class TouchBarView: NSObject {
     }
 
     private func updateModeViews(animateOpening: Bool = false) {
-        [seekSurface, expandedTime, normalControls, normalTrailing].forEach { $0?.layer?.removeAnimation(forKey: "scrub.reveal") }
+        [seekSurface, expandedTime, normalControls, normalTrailing, detailsControls, detailsTrailing].forEach { $0?.layer?.removeAnimation(forKey: "scrub.reveal") }
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0
             context.allowsImplicitAnimation = false
             CATransaction.begin()
             CATransaction.setDisableActions(true)
-            normalControls.isHidden = scrubOpen
-            normalTrailing.isHidden = scrubOpen
+            normalControls.isHidden = scrubOpen || detailsOpen
+            normalTrailing.isHidden = scrubOpen || detailsOpen
             seekSurface.isHidden = !scrubOpen
             expandedTime.isHidden = !scrubOpen
+            detailsControls.isHidden = !detailsOpen
+            detailsTrailing.isHidden = !detailsOpen
             leftSlot.layoutSubtreeIfNeeded()
             rightSlot.layoutSubtreeIfNeeded()
             CATransaction.commit()
         }
-        titleLabel.animationsEnabled = presented && !scrubOpen
+        titleLabel.animationsEnabled = presented && !scrubOpen && !detailsOpen
+        detailsTitle.animationsEnabled = presented && detailsOpen
+        updateProgressAnimation()
         resizeContentToAvailableWidth()
         if animateOpening, presented, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-            animateScrubViews([(seekSurface, 16), (expandedTime, 6)], appearing: true, duration: 0.24)
+            let views: [(NSView, Double)] = detailsOpen
+                ? [(detailsControls, 16), (detailsTrailing, 6)]
+                : [(seekSurface, 16), (expandedTime, 6)]
+            animateScrubViews(views, appearing: true, duration: 0.24)
         }
         scheduleSongSizing()
     }
@@ -421,9 +498,10 @@ final class TouchBarView: NSObject {
 
     func setPresented(_ visible: Bool) {
         presented = visible
-        if !visible { closeScrubber() }
+        if !visible { closeScrubber(); closeDetails() }
         updateProgressAnimation()
-        titleLabel.animationsEnabled = visible && !scrubOpen
+        titleLabel.animationsEnabled = visible && !scrubOpen && !detailsOpen
+        detailsTitle.animationsEnabled = visible && detailsOpen
         scheduleSongSizing()
     }
 
@@ -446,11 +524,15 @@ final class TouchBarView: NSObject {
             // song text and favorites, keeping the time badge and system controls.
             constraint = seekWidth
             width = min(560, max(160, availableWidth - left.minX - rightSlot.fittingSize.width - 24))
+        } else if detailsOpen {
+            constraint = detailsWidth
+            let favoriteWidth: CGFloat = favoriteButton.isHidden ? 0 : 55
+            width = min(340, max(100, availableWidth - left.minX - favoriteWidth - rightSlot.fittingSize.width - 24))
         } else {
             constraint = songWidth
             let navigationWidth = normalControls.bounds.width - songInfoView.bounds.width
-            let trailingWidth = max(167, rightSlot.fittingSize.width)
-            width = min(320, max(100, availableWidth - left.minX - navigationWidth - trailingWidth - 24))
+            let trailingWidth = max(112, rightSlot.fittingSize.width)
+            width = min(375, max(100, availableWidth - left.minX - navigationWidth - trailingWidth - 24))
         }
         guard width.isFinite, abs(constraint.constant - width) > 0.5 else { return }
         NSAnimationContext.runAnimationGroup { context in
@@ -459,6 +541,8 @@ final class TouchBarView: NSObject {
             constraint.constant = width
             songInfoView.invalidateIntrinsicContentSize()
             normalControls.invalidateIntrinsicContentSize()
+            detailsInfo.invalidateIntrinsicContentSize()
+            detailsControls.invalidateIntrinsicContentSize()
             leftSlot.invalidateIntrinsicContentSize()
             leftSlot.layoutSubtreeIfNeeded()
         }
@@ -467,6 +551,7 @@ final class TouchBarView: NSObject {
     func stop() {
         songSizingWork?.cancel()
         closeScrubber()
+        closeDetails()
         setPresented(false)
         onAction = nil
     }
@@ -474,8 +559,37 @@ final class TouchBarView: NSObject {
     @objc private func toggle() { onAction?(.togglePlayback) }
     @objc private func previous() { onAction?(.previous) }
     @objc private func next() { onAction?(.next) }
-    @objc private func openPlayer() { onAction?(.openPlayer) }
-    @objc private func addFavorite() { onAction?(.addFavorite) }
+    @objc private func toggleDetails() {
+        guard state.hasMedia, !scrubClosing else { return }
+        if detailsOpen { closeDetails(animated: true); return }
+        closeScrubber()
+        onAction?(.endSeeking)
+        detailsOpen = true
+        updateModeViews(animateOpening: true)
+    }
+
+    private func closeDetails(animated: Bool = false) {
+        guard detailsOpen else { return }
+        detailsOpen = false
+        updateModeViews()
+        if animated {
+            animateScrubViews([(normalControls, -8), (normalTrailing, -3)], appearing: true, duration: 0.24)
+        }
+    }
+
+    @objc private func toggleSongBlacklist() {
+        guard detailsOpen, let entry = state.songBlacklistEntry else { return }
+        onAction?(.toggleBlacklist(entry, trackKey: state.trackKey))
+    }
+
+    @objc private func toggleArtistBlacklist() {
+        guard detailsOpen, let entry = state.primaryArtistBlacklistEntry else { return }
+        onAction?(.toggleBlacklist(entry, trackKey: state.trackKey))
+    }
+    @objc private func addFavorite() {
+        guard detailsOpen else { return }
+        onAction?(.addFavorite)
+    }
 }
 
 private final class TrackProgressView: NSView {

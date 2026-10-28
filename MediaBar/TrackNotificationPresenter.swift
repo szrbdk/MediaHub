@@ -21,6 +21,8 @@ final class TrackNotificationPresenter {
         if !enabled { dismiss(animated: false) }
     }
 
+    func cancelCurrent() { dismiss(animated: false) }
+
     func start() {
         let workspace = NSWorkspace.shared.notificationCenter
         for name in [NSWorkspace.willSleepNotification, NSWorkspace.sessionDidResignActiveNotification] {

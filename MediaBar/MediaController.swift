@@ -6,8 +6,20 @@ final class MediaController {
     private let client = MediaClient()
     private let music = MusicAutomation()
     private let preferences = FeaturePreferences()
+    private let blacklist = BlacklistStore()
+    private var autoSkip = AutoSkipState()
+    private var blacklistOperationError: String?
+    private var autoSkipError: String?
     var notificationsEnabled: Bool { preferences.isEnabled(.notifications) }
     var touchBarEnabled: Bool { preferences.isEnabled(.touchBar) }
+    var autoSkipEnabled: Bool { preferences.isEnabled(.autoSkip) }
+    var currentMediaState: MediaState { state }
+    var blacklistDocument: BlacklistDocument { blacklist.document }
+    var canEditBlacklist: Bool { blacklist.readError == nil }
+    var blacklistStatus: String? {
+        blacklist.readError ?? blacklistOperationError ?? autoSkipError
+            ?? (autoSkip.limitReached ? "Otomatik atlama sınırına ulaşıldı (10 parça)." : nil)
+    }
     private let trackNotifications = TrackNotificationPresenter()
     private var trackAnnouncements = TrackAnnouncementState()
     private lazy var presenter = TouchBarPresenter(view: view)
@@ -54,6 +66,40 @@ final class MediaController {
         if enabled { readFavorite() }
     }
 
+    func setAutoSkipEnabled(_ enabled: Bool) {
+        preferences.setEnabled(enabled, for: .autoSkip)
+        autoSkip.resetLimit()
+        autoSkip.ignoreCurrent(state)
+        autoSkipError = nil
+    }
+
+    func reloadBlacklist() {
+        blacklist.reload()
+        renderState()
+    }
+
+    func changeBlacklist(_ entry: BlacklistEntry, adding: Bool) {
+        do {
+            blacklist.reload()
+            if adding { try blacklist.add(entry) }
+            else { try blacklist.remove(entry) }
+            blacklistOperationError = nil
+            // Editing the list never re-evaluates or skips the currently playing song.
+            autoSkip.ignoreCurrent(state)
+        } catch {
+            blacklistOperationError = "Karaliste kaydedilemedi: \(error.localizedDescription)"
+            logger.error("Blacklist write failed: \(error.localizedDescription, privacy: .public)")
+        }
+        renderState()
+    }
+
+    private func renderState() {
+        state.canEditBlacklist = canEditBlacklist
+        state.songBlacklisted = state.songBlacklistEntry.map { blacklist.document.contains($0) } ?? false
+        state.primaryArtistBlacklisted = state.primaryArtistBlacklistEntry.map { blacklist.document.contains($0) } ?? false
+        view.render(state)
+    }
+
     private func timer(interval: Double, action: @escaping () -> Void) -> Timer {
         let timer = Timer(timeInterval: interval, repeats: true) { _ in action() }
         timer.tolerance = interval * 0.1
@@ -94,9 +140,25 @@ final class MediaController {
             next.timeline = self.seekRequest.receive(next.timeline, now: Date().timeIntervalSince1970)
             next.seekPending = self.seekRequest.isPending
             self.state = next
-            self.view.render(next)
+            self.renderState()
             if payload != nil {
-                if let announcement = self.trackAnnouncements.observe(next, enabled: self.notificationsEnabled) {
+                let decision = self.autoSkip.observe(next, blacklist: self.blacklist.document,
+                    enabled: self.autoSkipEnabled && self.blacklist.readError == nil, now: Date().timeIntervalSince1970)
+                if decision == .skip {
+                    self.endSeeking()
+                    self.trackNotifications.cancelCurrent()
+                    self.autoSkipError = nil
+                    let expectedRevision = self.revision
+                    self.client.send(4) { [weak self] success in
+                        guard let self, !self.stopped, self.revision == expectedRevision else { return }
+                        if success { self.readState() }
+                        else {
+                            self.autoSkipError = "Karalistedeki parça atlanamadı."
+                            self.logger.error("Automatic skip command failed")
+                        }
+                    }
+                }
+                if let announcement = self.trackAnnouncements.observe(next, enabled: self.notificationsEnabled && decision != .skip) {
                     self.trackNotifications.show(announcement)
                 } else {
                     self.trackNotifications.updateContent(for: next)
@@ -128,7 +190,7 @@ final class MediaController {
             let request = seekRequest.begin(position: seconds, timeline: state.timeline, now: Date().timeIntervalSince1970)
             state.timeline = seekRequest.displayedTimeline(fallback: state.timeline)
             state.seekPending = true
-            view.render(state)
+            renderState()
             client.seek(seconds: seconds) { [weak self] success in
                 guard let self, !self.stopped, self.revision == expectedRevision,
                       self.seekRequest.requestID == request else { return }
@@ -137,13 +199,12 @@ final class MediaController {
                 }
                 self.state.seekPending = self.seekRequest.isPending
                 if !success { self.logger.error("Seek command failed") }
-                self.view.render(self.state)
+                self.renderState()
             }
-        case .openPlayer:
-            guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: state.bundleIdentifier) else { return }
-            NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration()) { [weak self] _, error in
-                if let error { self?.logger.error("Player activation failed: \(error.localizedDescription, privacy: .public)") }
-            }
+        case .toggleBlacklist(let entry, let key):
+            guard key == state.trackKey, canEditBlacklist,
+                  entry == state.songBlacklistEntry || entry == state.primaryArtistBlacklistEntry else { return }
+            changeBlacklist(entry, adding: !blacklist.document.contains(entry))
         case .addFavorite: addFavorite()
         }
     }
@@ -183,7 +244,7 @@ final class MediaController {
             if let favorite { self.state.favorite = favorite.boolValue }
             self.state.favoritePending = self.favoriteRequest.isPending
             if let error { self.logger.error("Favorite read failed: \(error, privacy: .public)") }
-            self.view.render(self.state)
+            self.renderState()
         }
     }
 
@@ -192,7 +253,7 @@ final class MediaController {
         let expectedRevision = revision
         favoriteWriteRevision = revision
         state.favoritePending = true
-        view.render(state)
+        renderState()
         music.favorite(forTitle: state.title, artist: state.artist, add: true) { [weak self] favorite, error in
             guard let self, !self.stopped, self.revision == expectedRevision else { return }
             self.favoriteWriteRevision = nil
@@ -201,7 +262,7 @@ final class MediaController {
             if let favorite { self.state.favorite = favorite.boolValue }
             self.state.favoritePending = self.favoriteRequest.isPending
             if let error { self.logger.error("Favorite update failed: \(error, privacy: .public)") }
-            self.view.render(self.state)
+            self.renderState()
             self.readFavorite()
         }
     }
