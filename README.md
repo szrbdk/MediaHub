@@ -29,11 +29,9 @@ It stays out of your way: no main window, no Dock icon, and no need to switch aw
 3. Eject the disk image, then open MediaHub from Applications.
 4. Look for the MediaHub icon in your menu bar.
 
-You do not need Xcode to use the app.
+If macOS blocks the first launch and you trust this download, use **System Settings → Privacy & Security → Open Anyway**. See [Apple’s instructions](https://support.apple.com/en-gb/102445).
 
-The download is ad-hoc signed and is not notarized by Apple. If macOS blocks the first launch and you trust this download, try opening the app, then use **System Settings → Privacy & Security → Open Anyway**. See [Apple’s instructions](https://support.apple.com/en-gb/102445).
-
-The menu bar menu is where you turn features on or off, manage your blacklist, change language, or quit. Your choices are remembered the next time you open the app. Touch Bar controls, notifications, and automatic skipping are all enabled initially.
+The menu bar menu is where you turn features on or off, manage your blacklist, change language, or quit. Your choices are remembered the next time you open the app.
 
 MediaHub starts when you open it; it does not add itself to your login items.
 
@@ -49,7 +47,7 @@ Use the playback buttons to play, pause, or move between tracks. Hold the previo
 
 Tap the title again to return to the playback controls. Tap a highlighted blacklist button again to undo an accidental block.
 
-The favorite button is available for Music. The star changes immediately when tapped, and the button stays disabled while Music confirms the change. If the request fails, the star returns to its previous confirmed state.
+The favorite button adds or removes favorites in Music.
 
 ## Block songs and artists
 
@@ -57,7 +55,7 @@ Open **Add to blacklist** in the menu bar to block the current song or an artist
 
 Open **Manage blacklist** and select an entry to remove it. Turn off **Automatic skipping** whenever you want to listen without the filter.
 
-Matching uses the song title and artist credit, or the artist name you selected. It ignores capitalization and surrounding spaces, but otherwise requires an exact match. Combined artist credits are kept together unless the player supplies separate artist names. For example, blocking `A & B` does not also block solo songs by `A` or credits written as `B & A`.
+Matches are exact apart from capitalization and surrounding spaces. Combined artist credits are treated as one name unless the player provides separate artists.
 
 Automatic skipping stops after 10 consecutive skips to avoid getting stuck in a blocked queue. Toggle it off and on to reset the limit.
 
@@ -67,21 +65,15 @@ A quiet card slides down near the camera, stays visible for a few seconds, and d
 
 Turn **Notifications** off in the menu bar to hide it. MediaHub does not change Music's own notification settings; you can disable those separately in System Settings if you see both.
 
-## Language and saved preferences
+## Language
 
-MediaHub supports **English** and **Turkish**. On first launch, it selects Turkish if that is your system's primary language, or English otherwise. Choose either language from the **Language** menu at any time; the change applies immediately and is remembered.
-
-Your blacklist is stored locally at:
-
-```text
-~/Library/Application Support/MediaHub/blacklist.json
-```
+Choose **English** or **Turkish** from the **Language** menu. Your selection is applied immediately and saved.
 
 ## Permissions and compatibility
 
 macOS may ask you to allow MediaHub to control Music when you use favorites. Grant that permission to enable adding and removing favorites.
 
-Available controls, artwork, and track information depend on what the player provides. MediaHub uses private macOS APIs for system media access and Touch Bar presentation, so system updates may affect these features.
+Available controls, artwork, and track information depend on the player and macOS version.
 
 ## License
 
@@ -89,4 +81,4 @@ MediaHub is available under the [MIT License](LICENSE). Copyright © 2026 Sezer 
 
 ## Acknowledgments
 
-MediaHub includes MediaRemote API declarations from [ungive/mediaremote-adapter](https://github.com/ungive/mediaremote-adapter), used under the BSD-3-Clause license. The [third-party license](MediaHub/Resources/MediaRemoteAdapter-LICENSE.txt) is included in the repository and application bundle.
+MediaHub uses [ungive/mediaremote-adapter](https://github.com/ungive/mediaremote-adapter) under the BSD-3-Clause license. The [third-party license](MediaHub/Resources/MediaRemoteAdapter-LICENSE.txt) is included in the repository and application bundle.

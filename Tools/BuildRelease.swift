@@ -91,11 +91,49 @@ do {
     try run("/usr/bin/ditto", [app.path, staging.appendingPathComponent("MediaHub.app").path])
     try manager.copyItem(at: root.appendingPathComponent("LICENSE"), to: staging.appendingPathComponent("LICENSE"))
     try manager.createSymbolicLink(at: staging.appendingPathComponent("Applications"), withDestinationURL: URL(fileURLWithPath: "/Applications"))
+    let aliasObject = build.appendingPathComponent("DMGAlias.o")
+    let layoutTool = build.appendingPathComponent("DMGLayout")
+    try run("/usr/bin/xcrun", ["clang", "-fobjc-arc", "-c", "Tools/DMGAlias.m", "-o", aliasObject.path],
+        log: build.appendingPathComponent("dmg-alias-build.log"))
+    try run("/usr/bin/xcrun", ["swiftc", "-module-cache-path", root.appendingPathComponent("build/ModuleCache").path,
+        "-import-objc-header", "Tools/DMGAlias.h", "Tools/DMGLayout.swift", aliasObject.path,
+        "-framework", "CoreServices", "-o", layoutTool.path], log: build.appendingPathComponent("dmg-layout-build.log"))
     let dmg = output.appendingPathComponent("MediaHub-\(version).dmg")
+    let identifier = UUID().uuidString
+    let writable = build.appendingPathComponent("Installer-\(identifier).dmg")
+    let volume = build.appendingPathComponent("Installer-\(identifier)")
+    let candidate = output.appendingPathComponent(".MediaHub-\(version)-\(identifier).dmg")
+    try manager.createDirectory(at: volume, withIntermediateDirectories: true)
+    var mounted = false
+    defer {
+        if mounted, (try? run("/usr/bin/hdiutil", ["detach", volume.path])) != nil { mounted = false }
+        // Never recursively remove a mount point if detaching failed.
+        if !mounted {
+            try? manager.removeItem(at: volume)
+            try? manager.removeItem(at: writable)
+        }
+        try? manager.removeItem(at: candidate)
+    }
     print("Creating \(dmg.lastPathComponent)…")
     try run("/usr/bin/hdiutil", ["create", "-volname", "MediaHub \(version)", "-srcfolder", staging.path,
-        "-format", "UDZO", "-fs", "HFS+", "-ov", "-o", dmg.path])
-    try run("/usr/bin/hdiutil", ["verify", dmg.path])
+        "-format", "UDRW", "-fs", "HFS+", "-o", writable.path])
+    try run("/usr/bin/hdiutil", ["attach", writable.path, "-readwrite", "-nobrowse", "-mountpoint", volume.path])
+    mounted = true
+    print("Configuring the drag-to-Applications window…")
+    try run(layoutTool.path, [volume.path])
+    try run("/usr/bin/codesign", ["--verify", "--deep", "--strict", volume.appendingPathComponent("MediaHub.app").path])
+    try run("/usr/bin/hdiutil", ["detach", volume.path])
+    mounted = false
+    try run("/usr/bin/hdiutil", ["convert", writable.path, "-format", "UDZO", "-o", candidate.path])
+    try run("/usr/bin/hdiutil", ["verify", candidate.path])
+    try run("/usr/bin/hdiutil", ["attach", candidate.path, "-readonly", "-nobrowse", "-mountpoint", volume.path])
+    mounted = true
+    try run(layoutTool.path, ["--verify", volume.path])
+    try run("/usr/bin/codesign", ["--verify", "--deep", "--strict", volume.appendingPathComponent("MediaHub.app").path])
+    try run("/usr/bin/hdiutil", ["detach", volume.path])
+    mounted = false
+    if manager.fileExists(atPath: dmg.path) { _ = try manager.replaceItemAt(dmg, withItemAt: candidate) }
+    else { try manager.moveItem(at: candidate, to: dmg) }
     let digest = SHA256.hash(data: try Data(contentsOf: dmg)).map { String(format: "%02x", $0) }.joined()
     try "\(digest)  \(dmg.lastPathComponent)\n".write(to: output.appendingPathComponent("\(dmg.lastPathComponent).sha256"), atomically: true, encoding: .utf8)
     print("Ready: \(dmg.path)\nSHA-256: \(digest)\nAd-hoc signed; not notarized. No application was launched.")

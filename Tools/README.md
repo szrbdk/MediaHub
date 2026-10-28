@@ -12,6 +12,10 @@ xcrun swift -module-cache-path build/ModuleCache Tools/BuildRelease.swift
 
 The tool builds Release for Apple Silicon and Intel, checks the app and embedded XPC service versions and signatures, stages the app beside an Applications shortcut, creates a compressed DMG, verifies its integrity, and generates a SHA-256 checksum. It never launches the application or its service.
 
+The disk image has a 640 × 420 installation window with a Retina background, a drag arrow, and fixed app/Applications icon positions. The layout is generated directly in Swift; a small Objective-C helper creates the native background alias. No Finder automation, AppleScript, Python, or third-party packaging dependencies are used.
+
+A temporary writable image is mounted without opening Finder, configured, detached, and converted to a compressed image. The layout generator checks its Finder metadata and resolves the background alias. A verified new image replaces the previous DMG only after successful conversion; its checksum is then regenerated. Temporary files stay under `build/Distribution`.
+
 Output:
 
 ```text
@@ -27,7 +31,7 @@ To recreate the DMG from an already-built and verified Release app:
 xcrun swift -module-cache-path build/ModuleCache Tools/BuildRelease.swift --skip-build
 ```
 
-The MIT license is included in the app resources and beside the app in the DMG. The third-party BSD-3-Clause license remains in the app resources.
+The MIT license is included in the app resources and as a hidden file beside the app in the DMG, keeping the installation window focused on the two icons. The third-party BSD-3-Clause license remains in the app resources.
 
 Packages are ad-hoc signed, not Developer ID signed or notarized. Keep that limitation explicit in the release notes and installation instructions.
 
