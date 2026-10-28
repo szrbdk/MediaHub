@@ -17,13 +17,15 @@
 "playback.toggle" = "Oynat / duraklat";
 "playback.next" = "Sonraki";
 "favorite.add" = "Favorilere ekle";
+"favorite.remove" = "Favorilerden kaldır";
+"favorite.inactive" = "Favorilerde değil";
 "touchbar.return_hint" = "Normal görünüme dönmek için dokunun";
 "blacklist.block_song" = "Şarkıyı engelle";
 "blacklist.block_artist" = "Sanatçıyı engelle";
 "playback.back_15_seconds" = "15 saniye geri";
 "playback.forward_15_seconds" = "15 saniye ileri";
 "favorite.added" = "Favorilere eklendi";
-"favorite.pending" = "Music’ten onay bekleniyor";
+"favorite.pending" = "Kaydediliyor…";
 "favorite.active" = "Favorilerde";
 "blacklist.song_blocked" = "Şarkı engelli";
 "blacklist.artist_blocked" = "Sanatçı engelli";

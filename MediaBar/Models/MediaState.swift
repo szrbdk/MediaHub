@@ -56,7 +56,7 @@ struct MediaState {
 }
 
 enum MediaAction {
-    case togglePlayback, previous, next, addFavorite
+    case togglePlayback, previous, next, toggleFavorite
     case toggleBlacklist(BlacklistEntry, trackKey: String)
     case beginSeeking(forward: Bool)
     case endSeeking

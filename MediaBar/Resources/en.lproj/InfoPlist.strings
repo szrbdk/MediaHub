@@ -1,1 +1,1 @@
-"NSAppleEventsUsageDescription" = "MediaBar reads the current Music track’s favorite status and adds it to your favorites when you tap the button.";
+"NSAppleEventsUsageDescription" = "MediaBar reads and changes the current Music track’s favorite status when you tap the button.";

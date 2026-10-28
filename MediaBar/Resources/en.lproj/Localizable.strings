@@ -17,13 +17,15 @@
 "playback.toggle" = "Play / pause";
 "playback.next" = "Next";
 "favorite.add" = "Add to favorites";
+"favorite.remove" = "Remove from favorites";
+"favorite.inactive" = "Not in favorites";
 "touchbar.return_hint" = "Tap to return to the main view";
 "blacklist.block_song" = "Block song";
 "blacklist.block_artist" = "Block artist";
 "playback.back_15_seconds" = "Back 15 seconds";
 "playback.forward_15_seconds" = "Forward 15 seconds";
 "favorite.added" = "Added to favorites";
-"favorite.pending" = "Waiting for Music";
+"favorite.pending" = "Saving…";
 "favorite.active" = "In favorites";
 "blacklist.song_blocked" = "Song blocked";
 "blacklist.artist_blocked" = "Artist blocked";

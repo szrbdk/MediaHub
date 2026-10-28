@@ -51,7 +51,15 @@ static NSAppleEventDescriptor *sendEvent(AEEventID command, NSAppleEventDescript
 - (BOOL)isCurrentGeneration:(NSUInteger)generation {
     @synchronized (self) { return _generation == generation; }
 }
-- (void)favoriteForTitle:(NSString *)title artist:(NSString *)artist add:(BOOL)add
+- (void)readFavoriteForTitle:(NSString *)title artist:(NSString *)artist
+             completion:(void (^)(NSNumber *, NSString *))completion {
+    [self favoriteForTitle:title artist:artist desired:nil completion:completion];
+}
+- (void)setFavoriteForTitle:(NSString *)title artist:(NSString *)artist favorite:(BOOL)favorite
+             completion:(void (^)(NSNumber *, NSString *))completion {
+    [self favoriteForTitle:title artist:artist desired:@(favorite) completion:completion];
+}
+- (void)favoriteForTitle:(NSString *)title artist:(NSString *)artist desired:(NSNumber *)desired
              completion:(void (^)(NSNumber *, NSString *))completion {
     __block NSUInteger generation;
     @synchronized (self) { generation = _generation; }
@@ -69,10 +77,11 @@ static NSAppleEventDescriptor *sendEvent(AEEventID command, NSAppleEventDescript
                     NSAppleEventDescriptor *favoriteProperty = property('pLov', track);
                     NSAppleEventDescriptor *result = sendEvent(kAEGetData, favoriteProperty, nil, &error);
                     if (!error && result) favorite = @(result.booleanValue);
-                    if (add && !error && !favorite.boolValue && [self isCurrentGeneration:generation]) {
+                    if (desired && !error && favorite && [self isCurrentGeneration:generation]) {
                         // The object specifier returned by Music pins this operation
                         // to the resolved track instead of a later "current track".
-                        sendEvent(kAESetData, favoriteProperty, [NSAppleEventDescriptor descriptorWithBoolean:YES], &error);
+                        sendEvent(kAESetData, favoriteProperty,
+                                  [NSAppleEventDescriptor descriptorWithBoolean:desired.boolValue], &error);
                         if (!error) {
                             result = sendEvent(kAEGetData, favoriteProperty, nil, &error);
                             favorite = result && !error ? @(result.booleanValue) : nil;

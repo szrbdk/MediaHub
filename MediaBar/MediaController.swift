@@ -28,7 +28,8 @@ final class MediaController {
     private var seekRequest = SeekRequestState()
     private var seekGeneration = 0
     private var favoriteReadBusy = false
-    private var favoriteWriteRevision: Int?
+    private var favoriteActivityTimer: Timer?
+    private var nextFavoriteVerificationAt: Double = 0
     private var pollTimer: Timer?
     private var favoriteTimer: Timer?
     private var progressTimer: Timer?
@@ -102,6 +103,8 @@ final class MediaController {
     }
 
     private func renderState() {
+        state.favorite = favoriteRequest.displayed
+        state.favoritePending = favoriteRequest.isPending
         state.canEditBlacklist = canEditBlacklist
         state.songBlacklisted = state.songBlacklistEntry.map { blacklist.document.contains($0) } ?? false
         state.primaryArtistBlacklisted = state.primaryArtistBlacklistEntry.map { blacklist.document.contains($0) } ?? false
@@ -139,11 +142,9 @@ final class MediaController {
                 self.seekRequest.reset()
                 self.revision += 1
                 self.music.cancelPendingRequests()
-                self.favoriteWriteRevision = nil
+                self.favoriteActivityTimer?.invalidate()
+                self.favoriteActivityTimer = nil
                 self.favoriteRequest.changeTrack(to: next.trackKey)
-            } else {
-                next.favorite = self.state.favorite
-                next.favoritePending = self.favoriteRequest.isPending
             }
             next.timeline = self.seekRequest.receive(next.timeline, now: Date().timeIntervalSince1970)
             next.seekPending = self.seekRequest.isPending
@@ -213,7 +214,7 @@ final class MediaController {
             guard key == state.trackKey, canEditBlacklist,
                   entry == state.songBlacklistEntry || entry == state.primaryArtistBlacklistEntry else { return }
             changeBlacklist(entry, adding: !blacklist.document.contains(entry))
-        case .addFavorite: addFavorite()
+        case .toggleFavorite: toggleFavorite()
         }
     }
 
@@ -235,43 +236,56 @@ final class MediaController {
     }
 
     private func readFavorite() {
-        guard !stopped, touchBarEnabled, state.hasMedia, state.isMusic, !favoriteReadBusy,
-              favoriteWriteRevision != revision else { return }
+        guard !stopped, (touchBarEnabled || favoriteRequest.isPending), state.hasMedia, state.isMusic,
+              !favoriteReadBusy, favoriteRequest.write == nil || favoriteRequest.isConfirming else { return }
         favoriteReadBusy = true
-        let key = state.trackKey
         let expectedRevision = revision
-        let observedRequest = favoriteRequest.requestID
-        music.favorite(forTitle: state.title, artist: state.artist, add: false) { [weak self] favorite, error in
+        let token = favoriteRequest.readToken
+        music.readFavorite(forTitle: state.title, artist: state.artist) { [weak self] favorite, error in
             guard let self else { return }
             self.favoriteReadBusy = false
             guard !self.stopped else { return }
             guard self.revision == expectedRevision else { self.readFavorite(); return }
-            // A read started before a tap must not resolve that newer request.
-            guard self.favoriteRequest.resolveRead(for: key, observedRequestID: observedRequest,
-                confirmed: favorite?.boolValue == true, failed: error != nil || favorite == nil) else { return }
-            if let favorite { self.state.favorite = favorite.boolValue }
-            self.state.favoritePending = self.favoriteRequest.isPending
+            let observed = error == nil ? favorite?.boolValue : nil
+            self.favoriteRequest.receiveRead(token: token, observed: observed,
+                at: ProcessInfo.processInfo.systemUptime)
             if let error { self.logger.error("Favorite read failed: \(error, privacy: .public)") }
-            self.renderState()
+            self.advanceFavorite()
         }
     }
 
-    private func addFavorite() {
-        guard state.isMusic, !state.favorite, let request = favoriteRequest.begin() else { return }
-        let expectedRevision = revision
-        favoriteWriteRevision = revision
-        state.favoritePending = true
+    private func toggleFavorite() {
+        guard state.hasMedia, state.isMusic, let request = favoriteRequest.beginToggle() else { return }
+        // Fill/clear the star and disable the button before sending Apple Events.
         renderState()
-        music.favorite(forTitle: state.title, artist: state.artist, add: true) { [weak self] favorite, error in
+        let expectedRevision = revision
+        music.setFavorite(forTitle: state.title, artist: state.artist, favorite: request.target) { [weak self] favorite, error in
             guard let self, !self.stopped, self.revision == expectedRevision else { return }
-            self.favoriteWriteRevision = nil
-            let waiting = error == nil && favorite?.boolValue == false
-            self.favoriteRequest.finish(request, stillWaiting: waiting)
-            if let favorite { self.state.favorite = favorite.boolValue }
-            self.state.favoritePending = self.favoriteRequest.isPending
+            guard self.favoriteRequest.completeWrite(request.id, observed: favorite?.boolValue,
+                failed: error != nil || favorite == nil, at: ProcessInfo.processInfo.systemUptime) else { return }
             if let error { self.logger.error("Favorite update failed: \(error, privacy: .public)") }
-            self.renderState()
-            self.readFavorite()
+            if self.favoriteRequest.isConfirming {
+                self.favoriteActivityTimer = self.timer(interval: 0.25) { [weak self] in self?.advanceFavorite() }
+                self.nextFavoriteVerificationAt = ProcessInfo.processInfo.systemUptime
+            }
+            self.advanceFavorite()
+        }
+    }
+
+    private func advanceFavorite() {
+        guard !stopped else { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        favoriteRequest.expire(at: now)
+        if state.favorite != favoriteRequest.displayed || state.favoritePending != favoriteRequest.isPending {
+            renderState()
+        }
+        if favoriteRequest.isConfirming && now >= nextFavoriteVerificationAt && !favoriteReadBusy {
+            nextFavoriteVerificationAt = now + 0.5
+            readFavorite()
+        }
+        if !favoriteRequest.isPending {
+            favoriteActivityTimer?.invalidate()
+            favoriteActivityTimer = nil
         }
     }
 
@@ -280,7 +294,8 @@ final class MediaController {
         revision += 1
         seekRequest.reset()
         music.cancelPendingRequests()
-        [pollTimer, progressTimer, favoriteTimer].forEach { $0?.invalidate() }
+        [pollTimer, progressTimer, favoriteTimer, favoriteActivityTimer].forEach { $0?.invalidate() }
+        favoriteRequest = FavoriteRequestState()
         presenter.stop()
         trackNotifications.stop()
         view.stop()

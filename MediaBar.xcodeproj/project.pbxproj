@@ -395,7 +395,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = "$(SRCROOT)/Shared";
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSAppleEventsUsageDescription = "MediaBar reads the current Music track’s favorite status and adds it to your favorites when you tap the button.";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "MediaBar reads and changes the current Music track’s favorite status when you tap the button.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -433,7 +433,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = "$(SRCROOT)/Shared";
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSAppleEventsUsageDescription = "MediaBar reads the current Music track’s favorite status and adds it to your favorites when you tap the button.";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "MediaBar reads and changes the current Music track’s favorite status when you tap the button.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

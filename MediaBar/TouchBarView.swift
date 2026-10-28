@@ -157,7 +157,7 @@ final class TouchBarView: NSObject {
         let showDetails = NSClickGestureRecognizer(target: self, action: #selector(toggleDetails))
         showDetails.allowedTouchTypes = .direct
         text.addGestureRecognizer(showDetails)
-        favoriteButton = button("star", L("favorite.add"), #selector(addFavorite))
+        favoriteButton = button("star", L("favorite.add"), #selector(toggleFavorite))
         let stack = NSStackView(views: [backButton, playButton, nextButton, text])
         text.setContentHuggingPriority(.defaultLow, for: .horizontal)
         stack.distribution = .fill
@@ -268,8 +268,11 @@ final class TouchBarView: NSObject {
         nextButton.image = NSImage(systemSymbolName: state.isPodcast ? "goforward.15" : "forward.end.fill", accessibilityDescription: state.isPodcast ? L("playback.forward_15_seconds") : L("playback.next"))
         favoriteButton.isHidden = !state.hasMedia || !state.isMusic
         favoriteButton.isEnabled = state.hasMedia && state.isMusic && !state.favoritePending
-        favoriteButton.image = NSImage(systemSymbolName: state.favorite ? "star.fill" : "star", accessibilityDescription: state.favorite ? L("favorite.added") : L("favorite.add"))
-        favoriteButton.toolTip = state.favoritePending ? L("favorite.pending") : state.favorite ? L("favorite.active") : L("favorite.add")
+        let favoriteAction = state.favorite ? L("favorite.remove") : L("favorite.add")
+        favoriteButton.image = NSImage(systemSymbolName: state.favorite ? "star.fill" : "star", accessibilityDescription: favoriteAction)
+        favoriteButton.toolTip = state.favoritePending ? "\(favoriteAction) · \(L("favorite.pending"))" : favoriteAction
+        favoriteButton.setAccessibilityLabel(favoriteAction)
+        favoriteButton.setAccessibilityValue(state.favorite ? L("favorite.active") : L("favorite.inactive"))
         blockSongButton.isEnabled = state.canEditBlacklist && state.songBlacklistEntry != nil
         blockArtistButton.isEnabled = state.canEditBlacklist && state.primaryArtistBlacklistEntry != nil
         blockSongButton.title = state.songBlacklisted ? L("blacklist.song_blocked") : L("blacklist.block_song")
@@ -594,9 +597,9 @@ final class TouchBarView: NSObject {
         guard detailsOpen, let entry = state.primaryArtistBlacklistEntry else { return }
         onAction?(.toggleBlacklist(entry, trackKey: state.trackKey))
     }
-    @objc private func addFavorite() {
+    @objc private func toggleFavorite() {
         guard detailsOpen else { return }
-        onAction?(.addFavorite)
+        onAction?(.toggleFavorite)
     }
 }
 

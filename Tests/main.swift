@@ -81,28 +81,100 @@ collisionB["title"] = "a"; collisionB["artist"] = "b|c"
 expect(MediaState(payload: collisionA).trackKey != MediaState(payload: collisionB).trackKey, "Track identity must not collide on delimiters")
 expect(!MediaState(payload: [:]).hasMedia && !MediaState(payload: [:]).timeline.isValid, "Empty media must clear controls")
 
+// Favorite verification times are injected; these tests never contact Music.
 var favorite = FavoriteRequestState()
+expect(favorite.beginToggle() == nil, "No track must reject favorite taps")
 favorite.changeTrack(to: "first")
-let firstRequest = favorite.begin()!
-expect(favorite.begin() == nil, "Duplicate favorite taps must be locked")
-favorite.finish(firstRequest, stillWaiting: true)
-expect(favorite.isPending, "Unconfirmed favorite must stay locked")
-favorite.resolveRead(for: "other", observedRequestID: firstRequest, confirmed: true, failed: false)
-expect(favorite.isPending, "A different track cannot resolve a pending request")
-favorite.resolveRead(for: "first", observedRequestID: firstRequest, confirmed: true, failed: false)
-expect(!favorite.isPending, "Confirmed favorite must unlock")
-let oldRequest = favorite.begin()!
+let initialFavoriteRead = favorite.readToken
+favorite.receiveRead(token: initialFavoriteRead, observed: false, at: 0)
+let firstRequest = favorite.beginToggle()!
+expect(firstRequest.target && favorite.displayed, "Adding must fill the star before Music responds")
+expect(favorite.isPending, "The button must lock as soon as the tap is accepted")
+expect(favorite.beginToggle() == nil, "Repeated taps must be ignored while writing")
+expect(!favorite.expire(at: 100), "Elapsed time alone must not unlock a write that has not replied")
+expect(favorite.isPending && favorite.beginToggle() == nil, "Even a very slow write must stay locked without queuing a second intent")
+expect(!favorite.receiveRead(token: initialFavoriteRead, observed: false, at: 101), "A read started before a tap must not revert the star")
+expect(!favorite.receiveRead(token: favorite.readToken, observed: false, at: 101), "An idle poll cannot resolve a write that has not replied")
+expect(favorite.completeWrite(firstRequest.id, observed: true, failed: false, at: 102), "A matching write reply must be accepted")
+expect(favorite.displayed && favorite.confirmed && !favorite.isPending, "Confirmation must immediately preserve the star and unlock")
+let removal = favorite.beginToggle()!
+expect(!removal.target && !favorite.displayed && favorite.isPending, "Removal must immediately empty the star and lock")
+expect(!favorite.completeWrite(firstRequest.id, observed: true, failed: false, at: 102), "A duplicate old reply cannot finish a newer request")
+expect(favorite.write?.id == removal.id && !favorite.displayed, "A stale reply must leave the removal unchanged")
+favorite.completeWrite(removal.id, observed: false, failed: false, at: 102.1)
+expect(!favorite.displayed && !favorite.confirmed && !favorite.isPending, "A confirmed false response must unlock removal")
+let immediateNext = favorite.beginToggle()!
+expect(immediateNext.target && favorite.isPending, "A fast reply must allow another tap without a fixed cooldown")
+favorite.completeWrite(immediateNext.id, observed: true, failed: false, at: 102.2)
+expect(favorite.confirmed && !favorite.isPending, "Ignoring repeated taps must not queue any follow-up writes")
+
+// A lagging write result keeps both the optimistic appearance and the lock.
+let laggingRemoval = favorite.beginToggle()!
+favorite.completeWrite(laggingRemoval.id, observed: true, failed: false, at: 110)
+expect(favorite.isConfirming && favorite.confirmationDeadline == 115, "A lagging reply must start bounded verification")
+expect(!favorite.displayed && favorite.confirmed && favorite.isPending, "The star must remain empty while removal is being confirmed")
+expect(favorite.beginToggle() == nil, "The button must remain locked during confirmation")
+let removalRead = favorite.readToken
+favorite.receiveRead(token: removalRead, observed: true, at: 111)
+expect(!favorite.displayed && favorite.isPending, "A lagging snapshot must neither flicker nor unlock")
+expect(!favorite.completeWrite(laggingRemoval.id, observed: false, failed: false, at: 111), "A duplicate write callback must not bypass verification")
+expect(!favorite.expire(at: 114.99), "Confirmation must stay active before the deadline")
+favorite.receiveRead(token: removalRead, observed: false, at: 114.99)
+expect(!favorite.displayed && !favorite.confirmed && !favorite.isPending, "A matching verification read must unlock removal")
+expect(!favorite.receiveRead(token: removalRead, observed: true, at: 115), "An old read cannot undo confirmed removal")
+
+let laggingAdd = favorite.beginToggle()!
+favorite.completeWrite(laggingAdd.id, observed: false, failed: false, at: 120)
+favorite.receiveRead(token: favorite.readToken, observed: true, at: 121)
+expect(favorite.displayed && favorite.confirmed && !favorite.isPending, "Delayed add confirmation must preserve the filled star and unlock")
+
+// Failures restore the last confirmed appearance and permit an explicit retry.
+let failedRemoval = favorite.beginToggle()!
+favorite.completeWrite(failedRemoval.id, observed: nil, failed: true, at: 122)
+expect(favorite.displayed && favorite.confirmed && !favorite.isPending, "Failed removal must silently restore the filled star and unlock")
+let retryRemoval = favorite.beginToggle()!
+expect(!retryRemoval.target, "A failed operation must permit an immediate explicit retry")
+favorite.completeWrite(retryRemoval.id, observed: true, failed: false, at: 123)
+let expiredRead = favorite.readToken
+expect(favorite.expire(at: 128), "Verification must time out even when a callback is missing")
+expect(favorite.displayed && !favorite.isPending, "Timeout must restore the confirmed state and unlock")
+expect(!favorite.receiveRead(token: expiredRead, observed: false, at: 129), "Late verification cannot override a rollback")
+
+var failedAdd = FavoriteRequestState()
+failedAdd.changeTrack(to: "track")
+let missingResponse = failedAdd.beginToggle()!
+failedAdd.completeWrite(missingResponse.id, observed: nil, failed: false, at: 0)
+expect(!failedAdd.displayed && !failedAdd.isPending, "A missing add response must roll back and unlock")
+let contradictoryReply = failedAdd.beginToggle()!
+failedAdd.completeWrite(contradictoryReply.id, observed: true, failed: true, at: 1)
+expect(!failedAdd.displayed && !failedAdd.isPending, "An error must not be mistaken for success even when a value is returned")
+let failedVerification = failedAdd.beginToggle()!
+failedAdd.completeWrite(failedVerification.id, observed: false, failed: false, at: 2)
+failedAdd.receiveRead(token: failedAdd.readToken, observed: nil, at: 3)
+expect(!failedAdd.displayed && !failedAdd.isPending, "A failed verification read must roll back and unlock")
+let boundaryWrite = failedAdd.beginToggle()!
+failedAdd.completeWrite(boundaryWrite.id, observed: false, failed: false, at: 4)
+failedAdd.receiveRead(token: failedAdd.readToken, observed: true, at: 9)
+expect(!failedAdd.displayed && !failedAdd.isPending, "Confirmation at its deadline must be rejected")
+
+// Track changes and returning to a track must invalidate all earlier callbacks.
+let previousTrackWrite = favorite.beginToggle()!
+let previousTrackRead = favorite.readToken
 favorite.changeTrack(to: "second")
-expect(!favorite.isPending, "Track change must clear pending request")
-let newRequest = favorite.begin()!
-favorite.finish(oldRequest, stillWaiting: false)
-expect(favorite.requestID == newRequest, "A stale reply cannot unlock a newer request")
-favorite.resolveRead(for: "first", observedRequestID: oldRequest, confirmed: false, failed: true)
-expect(favorite.isPending, "A stale read error cannot unlock the current request")
-let staleReadAccepted = favorite.resolveRead(for: "second", observedRequestID: nil, confirmed: false, failed: true)
-expect(!staleReadAccepted && favorite.isPending, "A read started before a tap cannot unlock that newer request")
-favorite.resolveRead(for: "second", observedRequestID: newRequest, confirmed: false, failed: true)
-expect(!favorite.isPending, "A real current-track failure must unlock retry")
+expect(!favorite.displayed && !favorite.isPending, "Track change must clear optimistic state and unlock")
+let newTrackWrite = favorite.beginToggle()!
+expect(newTrackWrite.target, "The new track must be immediately usable")
+expect(!favorite.completeWrite(previousTrackWrite.id, observed: false, failed: false, at: 130), "The previous track cannot resolve the new write")
+expect(!favorite.receiveRead(token: previousTrackRead, observed: true, at: 130), "An old track read must be ignored")
+expect(favorite.write?.id == newTrackWrite.id && favorite.isPending, "Old callbacks must not unlock the new track")
+favorite.changeTrack(to: "first")
+expect(!favorite.completeWrite(previousTrackWrite.id, observed: false, failed: false, at: 131), "Returning to an old track must not revive its callbacks")
+expect(!favorite.expire(at: 200), "An old timeout must not affect a new track")
+favorite.receiveRead(token: favorite.readToken, observed: true, at: 201)
+expect(favorite.displayed && favorite.confirmed, "Idle reads must still reflect changes made directly in Music")
+let sameTrackRequest = favorite.beginToggle()!
+favorite.changeTrack(to: "first")
+expect(favorite.write?.id == sameTrackRequest.id && favorite.isPending, "Refreshing the same track must not reset the lock")
 
 var seek = SeekRequestState()
 let seekID = seek.begin(position: 90, timeline: advancing, now: 1000)

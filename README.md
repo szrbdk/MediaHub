@@ -12,11 +12,17 @@ Disabling notifications immediately hides the visible card and cancels pending c
 - `MediaBar/MediaController.swift`: Media state, actions, timeline updates, and favorite requests. Communicates with the UI through `MediaState` and `MediaAction`.
 - `MediaBar/TouchBarPresenter.swift` and `MediaBar/Native/TouchBarSystem.m`: System-wide Touch Bar presentation and application, desktop, and wake notifications.
 - `MediaService`: An Objective-C XPC service that accesses MediaRemote directly. Xcode builds it and embeds it in the application's `Contents/XPCServices` directory. State is polled every 0.5 seconds; the displayed timeline advances locally between updates.
-- `MediaBar/Native/MusicAutomation.m`: Sends Apple Events directly to Music without AppleScript, Perl, shell, or another interpreter. Reads favorite status every five seconds. The favorite button adds a track to favorites; it does not remove it.
+- `MediaBar/Native/MusicAutomation.m`: Sends Apple Events directly to Music without AppleScript, Perl, shell, or another interpreter. Reads favorite status every five seconds while idle and supports explicit add/remove requests.
 
 In Podcasts, the previous/next controls skip backward/forward by 15 seconds. Holding a transport button starts seeking; releasing it, changing context, or reaching the 15-second safety limit ends seeking. Tapping the time area opens the expanded seek view. Releasing a drag submits the new position. Tapping the time area again returns to the normal view.
 
 Tapping the track title opens the Touch Bar action view instead of Music, with this order: **favorite → track/artist information → song blacklist button → artist blacklist button**. Tapping the title again returns to the main view. The favorite button appears only in this view and only for Music. Tapping a blacklist button again removes the entry; blocked entries are indicated by pink coloring and text. The artist action uses the first name in a genuine artist array, or the complete, unsplit artist text if no array is available. Adding or removing an entry does not skip the current track. The action view closes when the track changes or the Touch Bar is disabled. Controls are disabled when no media is available; the time area is hidden when timeline information is unavailable.
+
+## Favorites
+
+The favorite star toggles immediately when tapped, without waiting for Music. Tapping a filled star removes the track from favorites. The button is disabled until the operation is confirmed or fails; additional taps are ignored and never queued. There is no fixed two-second cooldown. A fast confirmation makes the button available immediately, while a slow request keeps it disabled.
+
+Late replies and stale reads do not override the optimistic star. If the write reply still contains the previous state, the button stays disabled while verification runs for up to five seconds. Failure or confirmation timeout silently restores the last confirmed state and re-enables the button, without an error notification or automatic retry. Track changes clear pending state and invalidate old callbacks, so the new track can be used immediately.
 
 ## Blacklist and automatic skipping
 
