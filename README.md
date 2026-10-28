@@ -71,3 +71,7 @@ build/MediaBarModelTests
 Model testleri Foundation kullanır; MediaBar’ı veya XPC servisini başlatmaz, Touch Bar oluşturmaz ve Music’e erişmez. Süre/oynatma hızı, geçersiz veriler, sarma sınırları, oynatıcı/parça kimliği ve favori isteklerinin gecikmiş sonuçları kontrol edilir.
 
 Fiziksel Touch Bar görünümü, Music/Podcasts ve diğer sistem oynatıcılarının verisi, otomasyon izni, uygulama geçişi/uyanma sonrası panel ve Quit sonrası eski Touch Bar’a dönüş kullanıcı tarafından doğrulanmalıdır. Geliştirme sırasında uygulama veya önizleme açılmaz.
+
+## Dil desteği
+
+Menüdeki dil seçimi **İngilizce** veya **Türkçe** olabilir. İlk kullanımda sistemin ana dili Türkçeyse Türkçe, diğer durumlarda İngilizce seçilir ve UserDefaults içine kaydedilir. Sonraki açılışlar kaydedilen dili kullanır. Seçim menü ile Touch Bar metinlerine yeniden başlatma gerektirmeden uygulanır. Çeviriler `MediaBar/Resources/en.lproj` ve `tr.lproj` içindedir; `menu.language` gibi sabit anahtarlar kullanılır. Şarkı ve sanatçı adları değiştirilmez. macOS otomasyon izin açıklamaları da iki dilde paketlenir; sistem izin penceresinin dilini macOS belirler.

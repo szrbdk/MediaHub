@@ -1,5 +1,8 @@
 import Foundation
 
+// Keep the shared localization's default preference in memory during model tests.
+UserDefaults.standard.setVolatileDomain(["appLanguage": "en"], forName: UserDefaults.argumentDomain)
+
 // Foundation-only executable. It never imports AppKit, connects to the XPC
 // service, sends Apple Events, launches MediaBar or presents a Touch Bar.
 var assertions = 0
@@ -186,6 +189,46 @@ final class TestPreferenceStore: PreferenceStore {
     func set(_ value: Any?, forKey key: String) { values[key] = value }
 }
 let preferenceStore = TestPreferenceStore()
+let resourceRoot = CommandLine.arguments.count > 1
+    ? URL(fileURLWithPath: CommandLine.arguments[1])
+    : URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("MediaBar/Resources")
+let languageStore = TestPreferenceStore()
+let localization = Localization(store: languageStore, preferredLanguages: ["tr-TR"], resourcesURL: resourceRoot)
+expect(localization.language == .tr, "First launch must select the system language")
+expect(languageStore.values["appLanguage"] as? String == "tr", "First launch must save a concrete language")
+expect(AppLanguage.allCases == [.en, .tr], "Only English and Turkish may be offered")
+expect(AppLanguage.initial(preferredLanguages: ["tr_TR"]) == .tr, "Underscore locale identifiers must work")
+expect(AppLanguage.initial(preferredLanguages: ["en-GB"]) == .en, "English system language must use English")
+expect(AppLanguage.initial(preferredLanguages: ["de-DE", "tr-TR"]) == .en, "An unsupported primary system language must fall back to English")
+expect(AppLanguage.initial(preferredLanguages: []) == .en, "Missing system language must fall back to English")
+expect(localization.text("menu.quit") == "Çıkış", "Turkish must load from the actual strings resource")
+localization.language = .en
+expect(localization.text("menu.quit") == "Quit", "Changing language must immediately select the English table")
+expect(localization.text("menu.language") == "Language", "All translations must switch together")
+localization.language = .tr
+expect(localization.text("menu.quit") == "Çıkış", "Switching back must not use cached English translations")
+let restoredLanguage = Localization(store: languageStore, preferredLanguages: ["en-US"], resourcesURL: resourceRoot)
+expect(restoredLanguage.language == .tr, "A saved choice must survive restart and system language changes")
+expect(restoredLanguage.text("menu.language") == "Dil", "The saved language must select its translation table")
+for invalid in ["system", "invalid"] {
+    let migrationStore = TestPreferenceStore()
+    migrationStore.values["appLanguage"] = invalid
+    let migrated = Localization(store: migrationStore, preferredLanguages: ["en-US"], resourcesURL: resourceRoot)
+    expect(migrated.language == .en, "Old and invalid choices must resolve from the system")
+    expect(migrationStore.values["appLanguage"] as? String == "en", "Migration must persist a concrete language")
+}
+let englishFirstLaunch = Localization(store: TestPreferenceStore(), preferredLanguages: ["en-US"], resourcesURL: resourceRoot)
+expect(englishFirstLaunch.language == .en, "English must be selected on first English-system launch")
+func translations(_ language: String) -> [String: String] {
+    let data = try! Data(contentsOf: resourceRoot.appendingPathComponent("\(language).lproj/Localizable.strings"))
+    return try! PropertyListSerialization.propertyList(from: data, format: nil) as! [String: String]
+}
+let englishStrings = translations("en")
+let turkishStrings = translations("tr")
+expect(Set(englishStrings.keys) == Set(turkishStrings.keys), "Both languages must cover the same keys")
+expect(englishStrings.keys.allSatisfy { $0.contains(".") && !$0.contains(" ") }, "Translations must use stable identifiers rather than display text")
+expect(!turkishStrings.values.contains(where: { $0.isEmpty }), "Translations must not be empty")
 let preferences = FeaturePreferences(store: preferenceStore)
 expect(preferences.isEnabled(.notifications), "Notifications should default to enabled")
 expect(preferences.isEnabled(.touchBar), "Touch Bar should default to enabled")

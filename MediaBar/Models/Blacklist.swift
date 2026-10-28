@@ -80,8 +80,8 @@ final class BlacklistStore {
         case unsupportedVersion, unreadableFile
         var errorDescription: String? {
             switch self {
-            case .unsupportedVersion: return "Karaliste dosyasının sürümü desteklenmiyor."
-            case .unreadableFile: return "Karaliste okunamadığı için dosya değiştirilmedi."
+            case .unsupportedVersion: return L("error.blacklist_version")
+            case .unreadableFile: return L("error.blacklist_read")
             }
         }
     }
@@ -115,7 +115,8 @@ final class BlacklistStore {
             readError = nil
         } catch {
             // Keep the original file intact; a failed read never becomes an empty save.
-            readError = error.localizedDescription
+            readError = (error as? StorageError)?.errorDescription
+                ?? L("error.blacklist_read")
         }
     }
 

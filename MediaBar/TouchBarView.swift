@@ -74,7 +74,7 @@ final class TouchBarView: NSObject {
         let tap = NSClickGestureRecognizer(target: self, action: #selector(toggleScrubber(_:)))
         tap.allowedTouchTypes = .direct
         timelineStack.addGestureRecognizer(tap)
-        timelineStack.toolTip = "Sarma çubuğunu açmak için dokunun"
+        timelineStack.toolTip = L("touchbar.open_seek_hint")
         NSLayoutConstraint.activate([
             timelineStack.widthAnchor.constraint(equalToConstant: 112),
             timelineStack.heightAnchor.constraint(equalToConstant: 28),
@@ -87,7 +87,7 @@ final class TouchBarView: NSObject {
             progressView.bottomAnchor.constraint(equalTo: timelineStack.bottomAnchor, constant: -3),
             progressView.heightAnchor.constraint(equalToConstant: 7)
         ])
-        progressView.setAccessibilityLabel("Oynatma ilerlemesi")
+        progressView.setAccessibilityLabel(L("touchbar.playback_progress"))
         timelineView = timelineStack
         let trailing = NSStackView(views: [timelineStack])
         trailing.spacing = 7
@@ -144,9 +144,9 @@ final class TouchBarView: NSObject {
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.widthAnchor.constraint(equalTo: text.widthAnchor, constant: -20).isActive = true
         titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        backButton = button("backward.end.fill", "Önceki", #selector(previous))
-        playButton = button("play.fill", "Oynat / duraklat", #selector(toggle))
-        nextButton = button("forward.end.fill", "Sonraki", #selector(next))
+        backButton = button("backward.end.fill", L("playback.previous"), #selector(previous))
+        playButton = button("play.fill", L("playback.toggle"), #selector(toggle))
+        nextButton = button("forward.end.fill", L("playback.next"), #selector(next))
         for (control, forward) in [(backButton!, false), (nextButton!, true)] {
             guard let hold = control as? HoldMediaButton else { continue }
             hold.configureHold()
@@ -157,7 +157,7 @@ final class TouchBarView: NSObject {
         let showDetails = NSClickGestureRecognizer(target: self, action: #selector(toggleDetails))
         showDetails.allowedTouchTypes = .direct
         text.addGestureRecognizer(showDetails)
-        favoriteButton = button("star", "Favorilere ekle", #selector(addFavorite))
+        favoriteButton = button("star", L("favorite.add"), #selector(addFavorite))
         let stack = NSStackView(views: [backButton, playButton, nextButton, text])
         text.setContentHuggingPriority(.defaultLow, for: .horizontal)
         stack.distribution = .fill
@@ -195,7 +195,7 @@ final class TouchBarView: NSObject {
         let tap = NSClickGestureRecognizer(target: self, action: #selector(toggleScrubber(_:)))
         tap.allowedTouchTypes = .direct
         target.addGestureRecognizer(tap)
-        target.toolTip = "Normal görünüme dönmek için dokunun"
+        target.toolTip = L("touchbar.return_hint")
         expandedTime = target
         target.isHidden = true
         rightSlot.addArrangedSubview(target)
@@ -227,8 +227,8 @@ final class TouchBarView: NSObject {
         detailsControls.detachesHiddenViews = true
         detailsControls.isHidden = true
         leftSlot.addArrangedSubview(detailsControls)
-        blockSongButton = blacklistButton("Şarkıyı engelle", symbol: "music.note", width: 106, action: #selector(toggleSongBlacklist))
-        blockArtistButton = blacklistButton("Sanatçıyı engelle", symbol: "person.fill", width: 116, action: #selector(toggleArtistBlacklist))
+        blockSongButton = blacklistButton(L("blacklist.block_song"), symbol: "music.note", width: 106, action: #selector(toggleSongBlacklist))
+        blockArtistButton = blacklistButton(L("blacklist.block_artist"), symbol: "person.fill", width: 116, action: #selector(toggleArtistBlacklist))
         detailsTrailing = NSStackView(views: [blockSongButton, blockArtistButton])
         detailsTrailing.spacing = 7
         detailsTrailing.alignment = .centerY
@@ -254,23 +254,31 @@ final class TouchBarView: NSObject {
         if newState.trackKey != state.trackKey || !newState.timeline.isValid { closeScrubber() }
         if newState.trackKey != state.trackKey || !newState.hasMedia { closeDetails() }
         state = newState
+        timelineView.toolTip = L("touchbar.open_seek_hint")
+        progressView.setAccessibilityLabel(L("touchbar.playback_progress"))
         [backButton, playButton, nextButton].forEach { $0?.isEnabled = state.hasMedia }
-        playButton.image = NSImage(systemSymbolName: state.playing ? "pause.fill" : "play.fill", accessibilityDescription: "Oynat / duraklat")
-        backButton.image = NSImage(systemSymbolName: state.isPodcast ? "gobackward.15" : "backward.end.fill", accessibilityDescription: state.isPodcast ? "15 saniye geri" : "Önceki")
-        nextButton.image = NSImage(systemSymbolName: state.isPodcast ? "goforward.15" : "forward.end.fill", accessibilityDescription: state.isPodcast ? "15 saniye ileri" : "Sonraki")
+        backButton.toolTip = state.isPodcast ? L("playback.back_15_seconds") : L("playback.previous")
+        playButton.toolTip = L("playback.toggle")
+        nextButton.toolTip = state.isPodcast ? L("playback.forward_15_seconds") : L("playback.next")
+        expandedTime.setAccessibilityLabel(L("touchbar.close_seek"))
+        expandedTime.toolTip = L("touchbar.return_hint")
+        seekSurface.setAccessibilityLabel(L("touchbar.playback_position"))
+        playButton.image = NSImage(systemSymbolName: state.playing ? "pause.fill" : "play.fill", accessibilityDescription: L("playback.toggle"))
+        backButton.image = NSImage(systemSymbolName: state.isPodcast ? "gobackward.15" : "backward.end.fill", accessibilityDescription: state.isPodcast ? L("playback.back_15_seconds") : L("playback.previous"))
+        nextButton.image = NSImage(systemSymbolName: state.isPodcast ? "goforward.15" : "forward.end.fill", accessibilityDescription: state.isPodcast ? L("playback.forward_15_seconds") : L("playback.next"))
         favoriteButton.isHidden = !state.hasMedia || !state.isMusic
         favoriteButton.isEnabled = state.hasMedia && state.isMusic && !state.favoritePending
-        favoriteButton.image = NSImage(systemSymbolName: state.favorite ? "star.fill" : "star", accessibilityDescription: state.favorite ? "Favorilere eklendi" : "Favorilere ekle")
-        favoriteButton.toolTip = state.favoritePending ? "Music’ten onay bekleniyor" : state.favorite ? "Favorilerde" : "Favorilere ekle"
+        favoriteButton.image = NSImage(systemSymbolName: state.favorite ? "star.fill" : "star", accessibilityDescription: state.favorite ? L("favorite.added") : L("favorite.add"))
+        favoriteButton.toolTip = state.favoritePending ? L("favorite.pending") : state.favorite ? L("favorite.active") : L("favorite.add")
         blockSongButton.isEnabled = state.canEditBlacklist && state.songBlacklistEntry != nil
         blockArtistButton.isEnabled = state.canEditBlacklist && state.primaryArtistBlacklistEntry != nil
-        blockSongButton.title = state.songBlacklisted ? "Şarkı engelli" : "Şarkıyı engelle"
-        blockArtistButton.title = state.primaryArtistBlacklisted ? "Sanatçı engelli" : "Sanatçıyı engelle"
+        blockSongButton.title = state.songBlacklisted ? L("blacklist.song_blocked") : L("blacklist.block_song")
+        blockArtistButton.title = state.primaryArtistBlacklisted ? L("blacklist.artist_blocked") : L("blacklist.block_artist")
         blockSongButton.contentTintColor = state.songBlacklisted ? .systemPink : .white
         blockArtistButton.contentTintColor = state.primaryArtistBlacklisted ? .systemPink : .white
-        blockSongButton.toolTip = state.songBlacklisted ? "Bu şarkıyı karalisteden kaldır" : "Bu şarkıyı karalisteye ekle"
+        blockSongButton.toolTip = state.songBlacklisted ? L("blacklist.remove_song_hint") : L("blacklist.add_song_hint")
         let artistName = state.artistNames.first ?? state.artistText
-        blockArtistButton.toolTip = "\(state.primaryArtistBlacklisted ? "Karalisteden kaldır" : "Karalisteye ekle"): \(artistName)"
+        blockArtistButton.toolTip = "\(state.primaryArtistBlacklisted ? L("blacklist.remove") : L("blacklist.add")): \(artistName)"
         renderTitle(animateChange: animateTitleChange)
         detailsTitle.setText(titleLabel.attributedStringValue, animateChange: false)
         refreshProgress()
@@ -280,9 +288,9 @@ final class TouchBarView: NSObject {
     private func renderTitle(animateChange: Bool) {
         guard state.hasMedia else {
             titleLabel.cancelTransition()
-            titleLabel.attributedStringValue = NSAttributedString(string: "♫  Çalan içerik bekleniyor", attributes: [
+            titleLabel.attributedStringValue = NSAttributedString(string: "♫  \(L("playback.waiting"))", attributes: [
                 .font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor(white: 0.55, alpha: 1)])
-            titleLabel.toolTip = "Çalan içerik bekleniyor"
+            titleLabel.toolTip = L("playback.waiting")
             return
         }
         let paragraph = NSMutableParagraphStyle()
@@ -301,8 +309,8 @@ final class TouchBarView: NSObject {
         value.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: value.length))
         titleLabel.setText(value, animateChange: animateChange)
         let trackDescription = state.artist.isEmpty ? state.title : "\(state.title) — \(state.artist)"
-        titleLabel.toolTip = "\(trackDescription) · Şarkı işlemlerini aç"
-        detailsTitle.toolTip = "\(trackDescription) · Ana görünüme dön"
+        titleLabel.toolTip = "\(trackDescription) · \(L("touchbar.open_actions"))"
+        detailsTitle.toolTip = "\(trackDescription) · \(L("touchbar.return"))"
     }
 
     func refreshProgress() {
@@ -776,7 +784,7 @@ private final class SeekTimeBadge: NSView {
         ])
         setAccessibilityElement(true)
         setAccessibilityRole(.button)
-        setAccessibilityLabel("Sarma ekranını kapat")
+        setAccessibilityLabel(L("touchbar.close_seek"))
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -826,7 +834,7 @@ final class SeekSurface: NSView, NSGestureRecognizerDelegate {
         addGestureRecognizer(click)
         setAccessibilityElement(true)
         setAccessibilityRole(.slider)
-        setAccessibilityLabel("Oynatma konumu")
+        setAccessibilityLabel(L("touchbar.playback_position"))
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 

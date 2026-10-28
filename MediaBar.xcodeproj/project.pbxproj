@@ -163,7 +163,9 @@
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
+				tr,
 				Base,
+				tr,
 			);
 			mainGroup = BB71016B308FF5FE002A7A4D;
 			minimizedProjectReferenceProxies = 1;
@@ -393,7 +395,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = "$(SRCROOT)/Shared";
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSAppleEventsUsageDescription = "MediaBar, Music’te çalan parçanın favori durumunu gösterir ve dokunduğunuzda favorilere ekler.";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "MediaBar reads the current Music track’s favorite status and adds it to your favorites when you tap the button.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -431,7 +433,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = "$(SRCROOT)/Shared";
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSAppleEventsUsageDescription = "MediaBar, Music’te çalan parçanın favori durumunu gösterir ve dokunduğunuzda favorilere ekler.";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "MediaBar reads the current Music track’s favorite status and adds it to your favorites when you tap the button.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

@@ -18,7 +18,7 @@ final class MediaController {
     var canEditBlacklist: Bool { blacklist.readError == nil }
     var blacklistStatus: String? {
         blacklist.readError ?? blacklistOperationError ?? autoSkipError
-            ?? (autoSkip.limitReached ? "Otomatik atlama sınırına ulaşıldı (10 parça)." : nil)
+            ?? (autoSkip.limitReached ? L("error.skip_limit") : nil)
     }
     private let trackNotifications = TrackNotificationPresenter()
     private var trackAnnouncements = TrackAnnouncementState()
@@ -78,6 +78,14 @@ final class MediaController {
         renderState()
     }
 
+    func refreshLanguage() {
+        blacklist.reload()
+        // Errors describe an earlier action; do not retain them in the previous language.
+        blacklistOperationError = nil
+        if autoSkipError != nil { autoSkipError = L("error.skip_failed") }
+        renderState()
+    }
+
     func changeBlacklist(_ entry: BlacklistEntry, adding: Bool) {
         do {
             blacklist.reload()
@@ -87,7 +95,7 @@ final class MediaController {
             // Editing the list never re-evaluates or skips the currently playing song.
             autoSkip.ignoreCurrent(state)
         } catch {
-            blacklistOperationError = "Karaliste kaydedilemedi: \(error.localizedDescription)"
+            blacklistOperationError = L("error.blacklist_save")
             logger.error("Blacklist write failed: \(error.localizedDescription, privacy: .public)")
         }
         renderState()
@@ -153,7 +161,7 @@ final class MediaController {
                         guard let self, !self.stopped, self.revision == expectedRevision else { return }
                         if success { self.readState() }
                         else {
-                            self.autoSkipError = "Karalistedeki parça atlanamadı."
+                            self.autoSkipError = L("error.skip_failed")
                             self.logger.error("Automatic skip command failed")
                         }
                     }

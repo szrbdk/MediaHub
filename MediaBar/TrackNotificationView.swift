@@ -34,12 +34,13 @@ final class TrackNotificationView: NSView {
         addSubview(symbol)
         setAccessibilityElement(true)
         setAccessibilityRole(.staticText)
-        setAccessibilityLabel("Şimdi çalıyor")
+        setAccessibilityLabel(L("notification.now_playing"))
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func update(_ announcement: TrackAnnouncement) {
+        setAccessibilityLabel(L("notification.now_playing"))
         titleLabel.stringValue = announcement.title
         artistLabel.stringValue = announcement.artist
         artistLabel.isHidden = announcement.artist.isEmpty

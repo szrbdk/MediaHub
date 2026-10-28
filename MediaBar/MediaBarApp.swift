@@ -15,10 +15,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem?
     private let controller = MediaController()
     private var terminating = false
-    private let addBlacklistMenu = NSMenu(title: "Karalisteye ekle")
-    private let manageBlacklistMenu = NSMenu(title: "Karalisteyi yönet")
+    private let addBlacklistMenu = NSMenu(title: L("blacklist.add"))
+    private let manageBlacklistMenu = NSMenu(title: L("menu.manage_blacklist"))
     private var autoSkipItem: NSMenuItem?
     private var blacklistStatusItem: NSMenuItem?
+    private var localizedMenuItems: [(item: NSMenuItem, key: String)] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -31,6 +32,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         item.button?.setAccessibilityLabel("MediaBar")
         item.button?.toolTip = "MediaBar"
+        statusItem = item
+        buildMenu()
+        controller.start()
+    }
+
+    private func buildMenu() {
+        addBlacklistMenu.title = L("blacklist.add")
+        manageBlacklistMenu.title = L("menu.manage_blacklist")
         let menu = NSMenu()
         menu.delegate = self
         menu.autoenablesItems = false
@@ -38,25 +47,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         heading.isEnabled = false
         menu.addItem(heading)
         menu.addItem(.separator())
-        let notifications = NSMenuItem(title: "Bildirimler", action: #selector(toggleNotifications(_:)), keyEquivalent: "")
+        let notifications = NSMenuItem(title: L("menu.notifications"), action: #selector(toggleNotifications(_:)), keyEquivalent: "")
         notifications.target = self
         notifications.state = controller.notificationsEnabled ? .on : .off
         menu.addItem(notifications)
-        let touchBar = NSMenuItem(title: "Touch Bar", action: #selector(toggleTouchBar(_:)), keyEquivalent: "")
+        let touchBar = NSMenuItem(title: L("menu.touch_bar"), action: #selector(toggleTouchBar(_:)), keyEquivalent: "")
         touchBar.target = self
         touchBar.state = controller.touchBarEnabled ? .on : .off
         menu.addItem(touchBar)
-        let autoSkip = NSMenuItem(title: "Otomatik atlama", action: #selector(toggleAutoSkip(_:)), keyEquivalent: "")
+        let autoSkip = NSMenuItem(title: L("menu.auto_skip"), action: #selector(toggleAutoSkip(_:)), keyEquivalent: "")
         autoSkip.target = self
         autoSkip.state = controller.autoSkipEnabled ? .on : .off
-        autoSkip.toolTip = "Yalnızca yeni başlayan parçalar için karalisteyi uygular. Art arda en fazla 10 parça atlar; kapatıp açmak sınırı sıfırlar."
+        autoSkip.toolTip = L("menu.auto_skip_hint")
         autoSkipItem = autoSkip
         menu.addItem(autoSkip)
         menu.addItem(.separator())
-        let addBlacklist = NSMenuItem(title: "Karalisteye ekle", action: nil, keyEquivalent: "")
+        let addBlacklist = NSMenuItem(title: L("blacklist.add"), action: nil, keyEquivalent: "")
         addBlacklist.submenu = addBlacklistMenu
         menu.addItem(addBlacklist)
-        let manageBlacklist = NSMenuItem(title: "Karalisteyi yönet", action: nil, keyEquivalent: "")
+        let manageBlacklist = NSMenuItem(title: L("menu.manage_blacklist"), action: nil, keyEquivalent: "")
         manageBlacklist.submenu = manageBlacklistMenu
         menu.addItem(manageBlacklist)
         let status = NSMenuItem(title: "", action: nil, keyEquivalent: "")
@@ -65,17 +74,66 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         blacklistStatusItem = status
         menu.addItem(status)
         menu.addItem(.separator())
-        let quit = NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let languageMenu = NSMenu(title: L("menu.language"))
+        languageMenu.autoenablesItems = false
+        let languageItem = NSMenuItem(title: L("menu.language"), action: nil, keyEquivalent: "")
+        languageItem.submenu = languageMenu
+        for language in AppLanguage.allCases {
+            let title = L(language == .tr ? "language.turkish" : "language.english")
+            let choice = NSMenuItem(title: title, action: #selector(changeLanguage(_:)), keyEquivalent: "")
+            choice.target = self
+            choice.representedObject = language.rawValue
+            localizedMenuItems.append((choice, language == .tr ? "language.turkish" : "language.english"))
+            choice.state = Localization.shared.language == language ? .on : .off
+            languageMenu.addItem(choice)
+        }
+        menu.addItem(languageItem)
+        menu.addItem(.separator())
+        let quit = NSMenuItem(title: L("menu.quit"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApp
         menu.addItem(quit)
-        item.menu = menu
-        statusItem = item
-        controller.start()
+        localizedMenuItems += [(notifications, "menu.notifications"), (touchBar, "menu.touch_bar"), (autoSkip, "menu.auto_skip"),
+                            (addBlacklist, "blacklist.add"), (manageBlacklist, "menu.manage_blacklist"),
+                            (languageItem, "menu.language"), (quit, "menu.quit")]
+        statusItem?.menu = menu
+        refreshBlacklistMenus()
+    }
+
+    private func refreshMenuLanguage() {
+        guard let menu = statusItem?.menu else { return }
+        // AppKit may derive an item's identifier from its action selector.
+        // Only explicitly registered translation keys should change a title.
+        for (item, key) in localizedMenuItems { item.title = L(key) }
+        // Keep the attached menu and submenus alive. A submenu can have only one
+        // parent item; rebuilding with the existing blacklist submenus tries to
+        // attach them to a second parent while the original menu is still active.
+        func refresh(_ menu: NSMenu) {
+            for item in menu.items {
+                if item.action == #selector(changeLanguage(_:)),
+                   let value = item.representedObject as? String {
+                    item.state = value == Localization.shared.language.rawValue ? .on : .off
+                }
+                if let submenu = item.submenu {
+                    submenu.title = item.title
+                    refresh(submenu)
+                }
+            }
+        }
+        refresh(menu)
+        autoSkipItem?.toolTip = L("menu.auto_skip_hint")
+        refreshBlacklistMenus()
+    }
+
+    @objc private func changeLanguage(_ sender: NSMenuItem) {
+        guard let value = sender.representedObject as? String, let language = AppLanguage(rawValue: value) else { return }
+        Localization.shared.language = language
+        controller.refreshLanguage()
+        refreshMenuLanguage()
     }
 
     func menuWillOpen(_ menu: NSMenu) {
         controller.reloadBlacklist()
-        refreshBlacklistMenus()
+        refreshMenuLanguage()
     }
 
     private func refreshBlacklistMenus() {
@@ -87,11 +145,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let state = controller.currentMediaState
         let document = controller.blacklistDocument
         if state.hasMedia && !blacklistKey(state.artistText).isEmpty {
-            addBlacklistMenu.addItem(.sectionHeader(title: "Şarkı"))
+            addBlacklistMenu.addItem(.sectionHeader(title: L("blacklist.song")))
             addEntry(.song(BlacklistedSong(title: state.title, artistText: state.artistText)),
                      title: state.title, to: addBlacklistMenu)
             addBlacklistMenu.addItem(.separator())
-            addBlacklistMenu.addItem(.sectionHeader(title: "Sanatçılar"))
+            addBlacklistMenu.addItem(.sectionHeader(title: L("blacklist.artists")))
             if !state.artistNames.isEmpty {
                 for name in state.artistNames {
                     addEntry(.artist(BlacklistedArtist(name: name, match: .individual)), title: name, to: addBlacklistMenu)
@@ -101,20 +159,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                          title: state.artistText, to: addBlacklistMenu)
             }
         } else {
-            addBlacklistMenu.addItem(disabledItem("Şarkı ve sanatçı bilgisi bekleniyor"))
+            addBlacklistMenu.addItem(disabledItem(L("blacklist.waiting_for_metadata")))
         }
         if document.artists.isEmpty && document.songs.isEmpty {
-            manageBlacklistMenu.addItem(disabledItem("Karaliste boş"))
+            manageBlacklistMenu.addItem(disabledItem(L("blacklist.empty")))
         } else {
             if !document.artists.isEmpty {
-                manageBlacklistMenu.addItem(.sectionHeader(title: "Sanatçılar"))
+                manageBlacklistMenu.addItem(.sectionHeader(title: L("blacklist.artists")))
                 for artist in document.artists {
                     addEntry(.artist(artist), title: artist.name, to: manageBlacklistMenu, removing: true)
                 }
             }
             if !document.songs.isEmpty {
                 if !document.artists.isEmpty { manageBlacklistMenu.addItem(.separator()) }
-                manageBlacklistMenu.addItem(.sectionHeader(title: "Şarkılar"))
+                manageBlacklistMenu.addItem(.sectionHeader(title: L("blacklist.songs")))
                 for song in document.songs {
                     addEntry(.song(song), title: "\(song.title) — \(song.artistText)", to: manageBlacklistMenu, removing: true)
                 }
@@ -139,7 +197,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Capture the displayed entry; a track change while the menu is open
         // must not silently replace what the user selected.
         item.representedObject = entry
-        item.toolTip = removing ? "Karalisteden kaldır: \(title)" : title
+        item.toolTip = removing ? "\(L("blacklist.remove")): \(title)" : title
         let exists = controller.blacklistDocument.contains(entry)
         item.state = !removing && exists ? .on : .off
         item.isEnabled = controller.canEditBlacklist && (removing || !exists)
