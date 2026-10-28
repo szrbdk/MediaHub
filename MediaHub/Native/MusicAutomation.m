@@ -42,7 +42,7 @@ static NSAppleEventDescriptor *sendEvent(AEEventID command, NSAppleEventDescript
     NSUInteger _generation;
 }
 - (instancetype)init {
-    if ((self = [super init])) _queue = dispatch_queue_create("com.sezerbudak.MediaBar.music", DISPATCH_QUEUE_SERIAL);
+    if ((self = [super init])) _queue = dispatch_queue_create("com.sezerbudak.MediaHub.music", DISPATCH_QUEUE_SERIAL);
     return self;
 }
 - (void)cancelPendingRequests {

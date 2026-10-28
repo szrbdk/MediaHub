@@ -1,18 +1,20 @@
-# MediaBar
+# MediaHub
+
+Previously named MediaBar. Open `MediaHub.xcodeproj` and use the `MediaHub` scheme. The application identifier is `com.sezerbudak.MediaHub`. On first launch, saved language and feature preferences are imported from `com.sezerbudak.MediaBar` without replacing existing MediaHub preferences. If the new blacklist is absent, a valid `~/Library/Application Support/MediaBar/blacklist.json` is copied atomically to `~/Library/Application Support/MediaHub/blacklist.json`. The original file remains unchanged. The new application identity may require granting Music automation permission again.
 
 A native macOS Touch Bar media controller written in Swift/AppKit and Objective-C. The project builds with Xcode 27.1 and targets macOS 27.0. It currently targets the developer's Mac; compatibility with other systems has not been verified.
 
-Launching the application enables the Touch Bar panel and track notifications according to saved preferences. The menu bar menu contains the **MediaBar** heading, **Touch Bar**, **Notifications**, and **Automatic skipping** toggles, **Add to blacklist**, **Manage blacklist**, a **Language** submenu, and **Quit**. Enabled features have checkmarks. Preferences are saved in UserDefaults and restored on the next launch; all three feature toggles default to enabled. The icon tooltip shows the application name. There is no main window, Dock icon, automatic launch at login, or separate settings window. Quitting closes the panels, sends any pending end-seek commands, and closes the XPC connection.
+Launching the application enables the Touch Bar panel and track notifications according to saved preferences. The menu bar menu contains the **MediaHub** heading, **Touch Bar**, **Notifications**, and **Automatic skipping** toggles, **Add to blacklist**, **Manage blacklist**, a **Language** submenu, and **Quit**. Enabled features have checkmarks. Preferences are saved in UserDefaults and restored on the next launch; all three feature toggles default to enabled. The icon tooltip shows the application name. There is no main window, Dock icon, automatic launch at login, or separate settings window. Quitting closes the panels, sends any pending end-seek commands, and closes the XPC connection.
 
 Disabling notifications immediately hides the visible card and cancels pending cards. Re-enabling them announces only subsequent track changes. Disabling the Touch Bar ends any active seek and restores the system's normal Touch Bar. Re-enabling it presents the panel again. These two settings are independent.
 
 ## Architecture
 
-- `MediaBar/TouchBarView.swift`: All Touch Bar design, including dimensions, colors, buttons, scrolling text, progress drawing, and the expanded seek view. Make Touch Bar UI changes in this file.
-- `MediaBar/MediaController.swift`: Media state, actions, timeline updates, and favorite requests. Communicates with the UI through `MediaState` and `MediaAction`.
-- `MediaBar/TouchBarPresenter.swift` and `MediaBar/Native/TouchBarSystem.m`: System-wide Touch Bar presentation and application, desktop, and wake notifications.
+- `MediaHub/TouchBarView.swift`: All Touch Bar design, including dimensions, colors, buttons, scrolling text, progress drawing, and the expanded seek view. Make Touch Bar UI changes in this file.
+- `MediaHub/MediaController.swift`: Media state, actions, timeline updates, and favorite requests. Communicates with the UI through `MediaState` and `MediaAction`.
+- `MediaHub/TouchBarPresenter.swift` and `MediaHub/Native/TouchBarSystem.m`: System-wide Touch Bar presentation and application, desktop, and wake notifications.
 - `MediaService`: An Objective-C XPC service that accesses MediaRemote directly. Xcode builds it and embeds it in the application's `Contents/XPCServices` directory. State is polled every 0.5 seconds; the displayed timeline advances locally between updates.
-- `MediaBar/Native/MusicAutomation.m`: Sends Apple Events directly to Music without AppleScript, Perl, shell, or another interpreter. Reads favorite status every five seconds while idle and supports explicit add/remove requests.
+- `MediaHub/Native/MusicAutomation.m`: Sends Apple Events directly to Music without AppleScript, Perl, shell, or another interpreter. Reads favorite status every five seconds while idle and supports explicit add/remove requests.
 
 In Podcasts, the previous/next controls skip backward/forward by 15 seconds. Holding a transport button starts seeking; releasing it, changing context, or reaching the 15-second safety limit ends seeking. Tapping the time area opens the expanded seek view. Releasing a drag submits the new position. Tapping the time area again returns to the normal view.
 
@@ -30,7 +32,7 @@ Use **Add to blacklist** to save the current song (title and artist text) or art
 
 Artist text is not split on `&`, commas, `feat.`, or similar markers. `A&B&C` matches only that text; it does not match `B&A&C` or `B` alone. Matching ignores case and leading/trailing whitespace while preserving internal whitespace, punctuation, and order. If the source provides the artist field as an actual array of names, each artist can be added separately. An individual artist entry matches that name in an array or an exactly matching solo artist string. The current MediaRemote source usually provides a single artist string. Names appear under **Song** and **Artists** section headings. Album names are never used as substitute artist information for matching.
 
-The first addition creates the list atomically at `~/Library/Application Support/MediaBar/blacklist.json`:
+The first addition creates the list atomically at `~/Library/Application Support/MediaHub/blacklist.json`:
 
 ```json
 {
@@ -56,30 +58,30 @@ The initial playback state at startup, repeated snapshots, and reconnecting to t
 
 ## Native system access
 
-Because of MediaRemote access checks introduced after macOS 15.4, the service identifier is set to `com.apple.sezerbudak.MediaBar.MediaService`. The main application identifier remains `com.sezerbudak.MediaBar`. This approach follows the [documented identity-check behavior in mediaremote-adapter](https://github.com/ungive/mediaremote-adapter#why-this-works). The service is built locally as part of this project; it is not supplied or signed by Apple.
+Because of MediaRemote access checks introduced after macOS 15.4, the service identifier is set to `com.apple.sezerbudak.MediaHub.MediaService`. The main application identifier remains `com.sezerbudak.MediaHub`. This approach follows the [documented identity-check behavior in mediaremote-adapter](https://github.com/ungive/mediaremote-adapter#why-this-works). The service is built locally as part of this project; it is not supplied or signed by Apple.
 
 Touch Bar presentation also uses private macOS APIs. Successful builds and package checks do not verify these APIs on a device. Missing symbols or connection failures are logged without crashing the application; media controls return to an empty or disabled state. There is no script-based fallback.
 
 App Sandbox is disabled. Music favorites may require macOS automation permission on first use. The application bundle includes the usage description and Apple Events entitlement. The project does not include publishing, distribution, or launch-at-login infrastructure.
 
-MediaRemote private API declarations were taken from revision `0e82bf1c44ec39554fbfc402ec88a48c6ae2a0fd` of `ungive/mediaremote-adapter`. Its BSD-3-Clause license is preserved in `MediaBar/Resources/MediaRemoteAdapter-LICENSE.txt` and copied into the application bundle. The original TouchBar reference project is left unchanged.
+MediaRemote private API declarations were taken from revision `0e82bf1c44ec39554fbfc402ec88a48c6ae2a0fd` of `ungive/mediaremote-adapter`. Its BSD-3-Clause license is preserved in `MediaHub/Resources/MediaRemoteAdapter-LICENSE.txt` and copied into the application bundle. The original TouchBar reference project is left unchanged.
 
 ## Verification without launching the application
 
 Application icon PNG sizes and the monochrome menu bar vector PDF are stored in `Assets.xcassets`. Their Swift/CoreGraphics source is `Tools/GenerateIcons.swift`. Regenerate them with `xcrun swift -module-cache-path build/ModuleCache Tools/GenerateIcons.swift`; this does not launch the application.
 
 ```sh
-xcodebuild -project MediaBar.xcodeproj -scheme MediaBar -configuration Debug -derivedDataPath build/Verification CODE_SIGN_IDENTITY=- build
-xcodebuild -project MediaBar.xcodeproj -scheme MediaBar -configuration Release -derivedDataPath build/Verification CODE_SIGN_IDENTITY=- build
+xcodebuild -project MediaHub.xcodeproj -scheme MediaHub -configuration Debug -derivedDataPath build/Verification CODE_SIGN_IDENTITY=- build
+xcodebuild -project MediaHub.xcodeproj -scheme MediaHub -configuration Release -derivedDataPath build/Verification CODE_SIGN_IDENTITY=- build
 
-xcrun swiftc -module-cache-path build/ModuleCache MediaBar/Models/*.swift Tests/main.swift -o build/MediaBarModelTests
-build/MediaBarModelTests
+xcrun swiftc -module-cache-path build/ModuleCache MediaHub/Models/*.swift Tests/main.swift -o build/MediaHubModelTests
+build/MediaHubModelTests
 ```
 
-Model tests use Foundation. They do not launch MediaBar or its XPC service, create a Touch Bar, or access Music. They cover timeline and playback rates, invalid data, seek boundaries, player/track identity, stale favorite request results, blacklist matching and storage, automatic skipping safeguards, preferences, and language selection.
+Model tests use Foundation. They do not launch MediaHub or its XPC service, create a Touch Bar, or access Music. They cover timeline and playback rates, invalid data, seek boundaries, player/track identity, stale favorite request results, blacklist matching and storage, automatic skipping safeguards, preferences, and language selection.
 
 Physical Touch Bar appearance, media data from Music/Podcasts and other system players, automation permission, panel behavior after application changes or wake, and restoring the previous Touch Bar on Quit require manual verification. Do not launch the application or previews during automated development work.
 
 ## Language support
 
-The language menu offers **English** and **Turkish**. On first launch, Turkish is selected when the system's primary language is Turkish; otherwise, English is selected. The choice is saved in UserDefaults. Subsequent launches use the saved language. Changes apply to menu and Touch Bar text without restarting the application. Translations live in `MediaBar/Resources/en.lproj` and `tr.lproj`, using stable keys such as `menu.language`. Track and artist names are not translated. macOS automation usage descriptions are also bundled in both languages; macOS determines the language of its system permission dialog.
+The language menu offers **English** and **Turkish**. On first launch, Turkish is selected when the system's primary language is Turkish; otherwise, English is selected. The choice is saved in UserDefaults. Subsequent launches use the saved language. Changes apply to menu and Touch Bar text without restarting the application. Translations live in `MediaHub/Resources/en.lproj` and `tr.lproj`, using stable keys such as `menu.language`. Track and artist names are not translated. macOS automation usage descriptions are also bundled in both languages; macOS determines the language of its system permission dialog.

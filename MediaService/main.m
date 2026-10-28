@@ -73,7 +73,7 @@
     }
     // All callbacks and the deadline run on the same queue. Late replies cannot
     // mutate a returned snapshot, and every request completes exactly once.
-    dispatch_queue_t queue = dispatch_queue_create("com.sezerbudak.MediaBar.snapshot", DISPATCH_QUEUE_SERIAL);
+    dispatch_queue_t queue = dispatch_queue_create("com.sezerbudak.MediaHub.snapshot", DISPATCH_QUEUE_SERIAL);
     NSMutableDictionary *snapshot = [NSMutableDictionary dictionary];
     __block NSUInteger remaining = 4;
     __block BOOL finished = NO;

@@ -1,7 +1,7 @@
 import AppKit
 import QuartzCore
 
-/// An app-owned overlay; never activates MediaBar or requests notification access.
+/// An app-owned overlay; never activates MediaHub or requests notification access.
 final class TrackNotificationPresenter {
     private var panel: TrackNotificationPanel?
     private var pendingShow: DispatchWorkItem?

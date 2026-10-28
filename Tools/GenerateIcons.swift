@@ -1,4 +1,4 @@
-// Development-only artwork generator. Does not launch MediaBar or create UI.
+// Development-only artwork generator. Does not launch MediaHub or create UI.
 // Regenerate with: xcrun swift -module-cache-path build/ModuleCache Tools/GenerateIcons.swift
 import Foundation
 import CoreGraphics
@@ -6,7 +6,7 @@ import ImageIO
 import UniformTypeIdentifiers
 
 let project = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-let assets = project.appendingPathComponent("MediaBar/Assets.xcassets")
+let assets = project.appendingPathComponent("MediaHub/Assets.xcassets")
 
 func color(_ red: CGFloat, _ green: CGFloat, _ blue: CGFloat, _ alpha: CGFloat = 1) -> CGColor {
     CGColor(red: red, green: green, blue: blue, alpha: alpha)

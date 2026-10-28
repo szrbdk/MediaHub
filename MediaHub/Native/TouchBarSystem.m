@@ -1,7 +1,7 @@
 #import "TouchBarSystem.h"
 #import <dlfcn.h>
 
-@interface NSTouchBar (MediaBarSystemModal)
+@interface NSTouchBar (MediaHubSystemModal)
 + (void)presentSystemModalTouchBar:(NSTouchBar *)bar systemTrayItemIdentifier:(NSString *)identifier;
 + (void)presentSystemModalTouchBar:(NSTouchBar *)bar placement:(long long)placement systemTrayItemIdentifier:(NSString *)identifier;
 + (void)dismissSystemModalTouchBar:(NSTouchBar *)bar;

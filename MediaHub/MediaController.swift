@@ -6,7 +6,7 @@ final class MediaController {
     private let client = MediaClient()
     private let music = MusicAutomation()
     private let preferences = FeaturePreferences()
-    private let blacklist = BlacklistStore()
+    private let blacklist = BlacklistStore(legacyFileURL: BlacklistStore.legacyURL)
     private var autoSkip = AutoSkipState()
     private var blacklistOperationError: String?
     private var autoSkipError: String?
@@ -40,7 +40,7 @@ final class MediaController {
     private var retryAfter = Date.distantPast
     private var stopped = true
     private var revision = 0
-    private let logger = Logger(subsystem: "com.sezerbudak.MediaBar", category: "Controller")
+    private let logger = Logger(subsystem: "com.sezerbudak.MediaHub", category: "Controller")
 
     func start() {
         stopped = false

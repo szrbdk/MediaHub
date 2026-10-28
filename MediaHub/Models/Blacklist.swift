@@ -88,20 +88,36 @@ final class BlacklistStore {
 
     static var defaultURL: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("MediaHub/blacklist.json")
+    }
+
+    static var legacyURL: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("MediaBar/blacklist.json")
     }
 
     let fileURL: URL
+    private let legacyFileURL: URL?
     private(set) var document = BlacklistDocument()
     private(set) var readError: String?
 
-    init(fileURL: URL = BlacklistStore.defaultURL) {
+    init(fileURL: URL = BlacklistStore.defaultURL, legacyFileURL: URL? = nil) {
         self.fileURL = fileURL
+        self.legacyFileURL = legacyFileURL
         reload()
     }
 
     func reload() {
         do {
+            if let legacyFileURL, !FileManager.default.fileExists(atPath: fileURL.path),
+               FileManager.default.fileExists(atPath: legacyFileURL.path) {
+                let data = try Data(contentsOf: legacyFileURL)
+                let legacy = try JSONDecoder().decode(BlacklistDocument.self, from: data)
+                guard legacy.version == 1 else { throw StorageError.unsupportedVersion }
+                try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+                // Keep the old file intact and never replace an existing MediaHub list.
+                try data.write(to: fileURL, options: .atomic)
+            }
             let data: Data
             do { data = try Data(contentsOf: fileURL) }
             catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == NSFileReadNoSuchFileError {

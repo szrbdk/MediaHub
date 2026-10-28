@@ -1,8 +1,11 @@
 import AppKit
 
 @main
-enum MediaBarApp {
+enum MediaHubApp {
     static func main() {
+        let defaults = UserDefaults.standard
+        LegacyPreferencesMigration.migrate(store: defaults,
+            legacyValues: defaults.persistentDomain(forName: LegacyPreferencesMigration.legacyDomain) ?? [:])
         let app = NSApplication.shared
         let delegate = AppDelegate()
         app.setActivationPolicy(.accessory)
@@ -28,10 +31,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             icon.size = NSSize(width: 18, height: 18)
             item.button?.image = icon
         } else {
-            item.button?.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "MediaBar")
+            item.button?.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "MediaHub")
         }
-        item.button?.setAccessibilityLabel("MediaBar")
-        item.button?.toolTip = "MediaBar"
+        item.button?.setAccessibilityLabel("MediaHub")
+        item.button?.toolTip = "MediaHub"
         statusItem = item
         buildMenu()
         controller.start()
@@ -43,7 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let menu = NSMenu()
         menu.delegate = self
         menu.autoenablesItems = false
-        let heading = NSMenuItem(title: "MediaBar", action: nil, keyEquivalent: "")
+        let heading = NSMenuItem(title: "MediaHub", action: nil, keyEquivalent: "")
         heading.isEnabled = false
         menu.addItem(heading)
         menu.addItem(.separator())

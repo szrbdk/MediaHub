@@ -4,7 +4,7 @@ import Foundation
 UserDefaults.standard.setVolatileDomain(["appLanguage": "en"], forName: UserDefaults.argumentDomain)
 
 // Foundation-only executable. It never imports AppKit, connects to the XPC
-// service, sends Apple Events, launches MediaBar or presents a Touch Bar.
+// service, sends Apple Events, launches MediaHub or presents a Touch Bar.
 var assertions = 0
 func expect(_ condition: @autoclosure () -> Bool, _ message: String) {
     assertions += 1
@@ -274,10 +274,32 @@ final class TestPreferenceStore: PreferenceStore {
     func set(_ value: Any?, forKey key: String) { values[key] = value }
 }
 let preferenceStore = TestPreferenceStore()
+let migratedPreferences = TestPreferenceStore()
+let legacyPreferences: [String: Any] = ["notificationsEnabled": false, "touchBarEnabled": false,
+    "autoSkipEnabled": true, "appLanguage": "tr", "unrelatedLegacyValue": "ignored"]
+LegacyPreferencesMigration.migrate(store: migratedPreferences, legacyValues: legacyPreferences)
+expect(!FeaturePreferences(store: migratedPreferences).isEnabled(.notifications), "Renaming must preserve disabled notifications")
+expect(!FeaturePreferences(store: migratedPreferences).isEnabled(.touchBar), "Renaming must preserve disabled Touch Bar")
+expect(FeaturePreferences(store: migratedPreferences).isEnabled(.autoSkip), "Renaming must preserve automatic skipping")
+expect(migratedPreferences.values["appLanguage"] as? String == "tr", "Renaming must preserve the selected language before localization initializes")
+expect(migratedPreferences.values["unrelatedLegacyValue"] == nil, "Migration must only copy application preferences")
+migratedPreferences.set(true, forKey: "notificationsEnabled")
+LegacyPreferencesMigration.migrate(store: migratedPreferences, legacyValues: legacyPreferences)
+expect(FeaturePreferences(store: migratedPreferences).isEnabled(.notifications), "Legacy preferences must only migrate once")
+let existingHubPreferences = TestPreferenceStore()
+existingHubPreferences.set("en", forKey: "appLanguage")
+existingHubPreferences.set(false, forKey: "autoSkipEnabled")
+LegacyPreferencesMigration.migrate(store: existingHubPreferences, legacyValues: legacyPreferences)
+expect(existingHubPreferences.values["appLanguage"] as? String == "en", "An existing MediaHub language must not be overwritten")
+expect(!FeaturePreferences(store: existingHubPreferences).isEnabled(.autoSkip), "Existing MediaHub toggles must take precedence")
+let freshHubPreferences = TestPreferenceStore()
+LegacyPreferencesMigration.migrate(store: freshHubPreferences, legacyValues: [:])
+expect(FeaturePreferences(store: freshHubPreferences).isEnabled(.notifications), "Fresh installations must retain default preferences")
+expect(freshHubPreferences.values["appLanguage"] == nil, "Fresh installations must let localization select the initial language")
 let resourceRoot = CommandLine.arguments.count > 1
     ? URL(fileURLWithPath: CommandLine.arguments[1])
     : URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-        .appendingPathComponent("MediaBar/Resources")
+        .appendingPathComponent("MediaHub/Resources")
 let languageStore = TestPreferenceStore()
 let localization = Localization(store: languageStore, preferredLanguages: ["tr-TR"], resourcesURL: resourceRoot)
 expect(localization.language == .tr, "First launch must select the system language")
@@ -412,10 +434,39 @@ _ = circuit.observe(track("Allowed", artist: "Other"), blacklist: blocked, enabl
 expect(!circuit.limitReached, "An allowed track should reset the consecutive-skip limit")
 expect(circuit.observe(track("Blocked again"), blacklist: blocked, enabled: true, now: 13) == .skip, "Filtering should recover after an allowed track")
 
-let blacklistTestDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("MediaBarBlacklistTests-\(UUID().uuidString)")
+let blacklistTestDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("MediaHubBlacklistTests-\(UUID().uuidString)")
 do {
     defer { try? FileManager.default.removeItem(at: blacklistTestDirectory) }
-    let url = blacklistTestDirectory.appendingPathComponent("MediaBar/blacklist.json")
+    let legacyURL = blacklistTestDirectory.appendingPathComponent("MediaBar/blacklist.json")
+    let hubURL = blacklistTestDirectory.appendingPathComponent("MigratedMediaHub/blacklist.json")
+    let legacyStore = BlacklistStore(fileURL: legacyURL)
+    try legacyStore.add(fullGroup)
+    try legacyStore.add(blockedSong)
+    let legacyData = try Data(contentsOf: legacyURL)
+    let migratedList = BlacklistStore(fileURL: hubURL, legacyFileURL: legacyURL)
+    expect(migratedList.readError == nil && migratedList.document.contains(fullGroup) && migratedList.document.contains(blockedSong), "Renaming must migrate the complete blacklist")
+    let migratedData = try Data(contentsOf: hubURL)
+    expect(migratedData == legacyData, "Migration must preserve the exact original file contents")
+    try migratedList.remove(fullGroup)
+    migratedList.reload()
+    expect(!migratedList.document.contains(fullGroup), "An existing MediaHub blacklist must not be replaced by the old file")
+    let originalAfterMigration = try Data(contentsOf: legacyURL)
+    expect(originalAfterMigration == legacyData, "The old blacklist must remain untouched")
+    let absentURL = blacklistTestDirectory.appendingPathComponent("Absent/blacklist.json")
+    let freshURL = blacklistTestDirectory.appendingPathComponent("FreshMediaHub/blacklist.json")
+    let freshList = BlacklistStore(fileURL: freshURL, legacyFileURL: absentURL)
+    expect(freshList.readError == nil && !FileManager.default.fileExists(atPath: freshURL.path), "A fresh install must not create an empty blacklist during migration")
+    let badLegacyURL = blacklistTestDirectory.appendingPathComponent("invalid-legacy.json")
+    let refusedURL = blacklistTestDirectory.appendingPathComponent("RefusedMediaHub/blacklist.json")
+    try Data("invalid".utf8).write(to: badLegacyURL)
+    expect(BlacklistStore(fileURL: refusedURL, legacyFileURL: badLegacyURL).readError != nil, "Malformed legacy data must report an error")
+    expect(!FileManager.default.fileExists(atPath: refusedURL.path), "Malformed data must not be copied into the new location")
+    try Data("{\"version\":2,\"artists\":[],\"songs\":[]}".utf8).write(to: badLegacyURL)
+    expect(BlacklistStore(fileURL: refusedURL, legacyFileURL: badLegacyURL).readError != nil, "Unsupported legacy versions must not migrate")
+    let blockedMigration = blacklistTestDirectory.appendingPathComponent("migration-obstruction")
+    try Data("file".utf8).write(to: blockedMigration)
+    expect(BlacklistStore(fileURL: blockedMigration.appendingPathComponent("blacklist.json"), legacyFileURL: legacyURL).readError != nil, "Migration write failures must be reported without discarding the old list")
+    let url = blacklistTestDirectory.appendingPathComponent("MediaHub/blacklist.json")
     let store = BlacklistStore(fileURL: url)
     expect(store.readError == nil && store.document.artists.isEmpty, "A missing blacklist must load as empty")
     try store.add(fullGroup)

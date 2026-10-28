@@ -3,11 +3,11 @@ import OSLog
 
 final class MediaClient {
     private var connection: NSXPCConnection?
-    private let logger = Logger(subsystem: "com.sezerbudak.MediaBar", category: "MediaRemote")
+    private let logger = Logger(subsystem: "com.sezerbudak.MediaHub", category: "MediaRemote")
 
     private func proxy(onError: @escaping () -> Void) -> MediaServiceProtocol? {
         if connection == nil {
-            let connection = NSXPCConnection(serviceName: "com.apple.sezerbudak.MediaBar.MediaService")
+            let connection = NSXPCConnection(serviceName: "com.apple.sezerbudak.MediaHub.MediaService")
             connection.remoteObjectInterface = NSXPCInterface(with: MediaServiceProtocol.self)
             connection.interruptionHandler = { [weak self] in
                 self?.logger.error("Media service interrupted; the next request will reconnect")

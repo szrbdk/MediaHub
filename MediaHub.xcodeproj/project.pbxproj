@@ -41,13 +41,13 @@
 		AA0000000000000000000014 /* MediaRemote.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MediaRemote.h; sourceTree = "<group>"; };
 		AA0000000000000000000015 /* MediaServiceProtocol.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MediaServiceProtocol.h; sourceTree = "<group>"; };
 		AA0000000000000000000016 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		BB710174308FF5FE002A7A4D /* MediaBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MediaBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BB710174308FF5FE002A7A4D /* MediaHub.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MediaHub.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		BB710176308FF5FE002A7A4D /* MediaBar */ = {
+		BB710176308FF5FE002A7A4D /* MediaHub */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = MediaBar;
+			path = MediaHub;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -88,7 +88,7 @@
 		BB71016B308FF5FE002A7A4D = {
 			isa = PBXGroup;
 			children = (
-				BB710176308FF5FE002A7A4D /* MediaBar */,
+				BB710176308FF5FE002A7A4D /* MediaHub */,
 				AA0000000000000000000023 /* MediaService */,
 				AA0000000000000000000024 /* Shared */,
 				BB710175308FF5FE002A7A4D /* Products */,
@@ -98,7 +98,7 @@
 		BB710175308FF5FE002A7A4D /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				BB710174308FF5FE002A7A4D /* MediaBar.app */,
+				BB710174308FF5FE002A7A4D /* MediaHub.app */,
 				AA0000000000000000000013 /* MediaService.xpc */,
 			);
 			name = Products;
@@ -121,9 +121,9 @@
 			productReference = AA0000000000000000000013 /* MediaService.xpc */;
 			productType = "com.apple.product-type.xpc-service";
 		};
-		BB710173308FF5FE002A7A4D /* MediaBar */ = {
+		BB710173308FF5FE002A7A4D /* MediaHub */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = BB71017F308FF601002A7A4D /* Build configuration list for PBXNativeTarget "MediaBar" */;
+			buildConfigurationList = BB71017F308FF601002A7A4D /* Build configuration list for PBXNativeTarget "MediaHub" */;
 			buildPhases = (
 				BB710170308FF5FE002A7A4D /* Sources */,
 				BB710171308FF5FE002A7A4D /* Frameworks */,
@@ -136,11 +136,11 @@
 				AA0000000000000000000026 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				BB710176308FF5FE002A7A4D /* MediaBar */,
+				BB710176308FF5FE002A7A4D /* MediaHub */,
 			);
-			name = MediaBar;
-			productName = MediaBar;
-			productReference = BB710174308FF5FE002A7A4D /* MediaBar.app */;
+			name = MediaHub;
+			productName = MediaHub;
+			productReference = BB710174308FF5FE002A7A4D /* MediaHub.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -158,7 +158,7 @@
 					};
 				};
 			};
-			buildConfigurationList = BB71016F308FF5FE002A7A4D /* Build configuration list for PBXProject "MediaBar" */;
+			buildConfigurationList = BB71016F308FF5FE002A7A4D /* Build configuration list for PBXProject "MediaHub" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -174,7 +174,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				BB710173308FF5FE002A7A4D /* MediaBar */,
+				BB710173308FF5FE002A7A4D /* MediaHub */,
 				AA0000000000000000000030 /* MediaService */,
 			);
 		};
@@ -231,7 +231,7 @@
 					"-framework",
 					ImageIO,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.apple.sezerbudak.MediaBar.MediaService;
+				PRODUCT_BUNDLE_IDENTIFIER = com.apple.sezerbudak.MediaHub.MediaService;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 			};
@@ -256,13 +256,13 @@
 					"-framework",
 					ImageIO,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.apple.sezerbudak.MediaBar.MediaService;
+				PRODUCT_BUNDLE_IDENTIFIER = com.apple.sezerbudak.MediaHub.MediaService;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 			};
 			name = Release;
 		};
-		BB71017D308FF601002A7A4D /* Debug configuration for PBXProject "MediaBar" */ = {
+		BB71017D308FF601002A7A4D /* Debug configuration for PBXProject "MediaHub" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -325,7 +325,7 @@
 			};
 			name = Debug;
 		};
-		BB71017E308FF601002A7A4D /* Release configuration for PBXProject "MediaBar" */ = {
+		BB71017E308FF601002A7A4D /* Release configuration for PBXProject "MediaHub" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -380,12 +380,12 @@
 			};
 			name = Release;
 		};
-		BB710180308FF601002A7A4D /* Debug configuration for PBXNativeTarget "MediaBar" */ = {
+		BB710180308FF601002A7A4D /* Debug configuration for PBXNativeTarget "MediaHub" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = MediaBar/MediaBar.entitlements;
+				CODE_SIGN_ENTITLEMENTS = MediaHub/MediaHub.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -395,7 +395,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = "$(SRCROOT)/Shared";
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSAppleEventsUsageDescription = "MediaBar reads and changes the current Music track’s favorite status when you tap the button.";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "MediaHub reads and changes the current Music track’s favorite status when you tap the button.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -406,24 +406,24 @@
 					"-framework",
 					Carbon,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.sezerbudak.MediaBar;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sezerbudak.MediaHub;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = "MediaBar/Native/MediaBar-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "MediaHub/Native/MediaHub-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
 		};
-		BB710181308FF601002A7A4D /* Release configuration for PBXNativeTarget "MediaBar" */ = {
+		BB710181308FF601002A7A4D /* Release configuration for PBXNativeTarget "MediaHub" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = MediaBar/MediaBar.entitlements;
+				CODE_SIGN_ENTITLEMENTS = MediaHub/MediaHub.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -433,7 +433,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = "$(SRCROOT)/Shared";
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSAppleEventsUsageDescription = "MediaBar reads and changes the current Music track’s favorite status when you tap the button.";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "MediaHub reads and changes the current Music track’s favorite status when you tap the button.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -444,13 +444,13 @@
 					"-framework",
 					Carbon,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.sezerbudak.MediaBar;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sezerbudak.MediaHub;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = "MediaBar/Native/MediaBar-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "MediaHub/Native/MediaHub-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -467,19 +467,19 @@
 			);
 			defaultConfigurationName = Release;
 		};
-		BB71016F308FF5FE002A7A4D /* Build configuration list for PBXProject "MediaBar" */ = {
+		BB71016F308FF5FE002A7A4D /* Build configuration list for PBXProject "MediaHub" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				BB71017D308FF601002A7A4D /* Debug configuration for PBXProject "MediaBar" */,
-				BB71017E308FF601002A7A4D /* Release configuration for PBXProject "MediaBar" */,
+				BB71017D308FF601002A7A4D /* Debug configuration for PBXProject "MediaHub" */,
+				BB71017E308FF601002A7A4D /* Release configuration for PBXProject "MediaHub" */,
 			);
 			defaultConfigurationName = Release;
 		};
-		BB71017F308FF601002A7A4D /* Build configuration list for PBXNativeTarget "MediaBar" */ = {
+		BB71017F308FF601002A7A4D /* Build configuration list for PBXNativeTarget "MediaHub" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				BB710180308FF601002A7A4D /* Debug configuration for PBXNativeTarget "MediaBar" */,
-				BB710181308FF601002A7A4D /* Release configuration for PBXNativeTarget "MediaBar" */,
+				BB710180308FF601002A7A4D /* Debug configuration for PBXNativeTarget "MediaHub" */,
+				BB710181308FF601002A7A4D /* Release configuration for PBXNativeTarget "MediaHub" */,
 			);
 			defaultConfigurationName = Release;
 		};

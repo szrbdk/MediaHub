@@ -10,7 +10,7 @@ final class TouchBarPresenter {
     private var stopped = true
     private var presented = false
     private var enabled = true
-    private let logger = Logger(subsystem: "com.sezerbudak.MediaBar", category: "TouchBar")
+    private let logger = Logger(subsystem: "com.sezerbudak.MediaHub", category: "TouchBar")
 
     init(view: TouchBarView) { self.view = view }
 

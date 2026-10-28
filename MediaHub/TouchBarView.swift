@@ -54,10 +54,10 @@ final class TouchBarView: NSObject {
         leftSlot.spacing = 0
         leftSlot.alignment = .centerY
         leftSlot.detachesHiddenViews = true
-        let controls = NSCustomTouchBarItem(identifier: .init("com.sezerbudak.MediaBar.controls"))
+        let controls = NSCustomTouchBarItem(identifier: .init("com.sezerbudak.MediaHub.controls"))
         controls.view = leftSlot
 
-        let escape = NSCustomTouchBarItem(identifier: .init("com.sezerbudak.MediaBar.emptyEscape"))
+        let escape = NSCustomTouchBarItem(identifier: .init("com.sezerbudak.MediaHub.emptyEscape"))
         let spacer = NSView(frame: NSRect(x: 0, y: 0, width: 1, height: 30))
         spacer.widthAnchor.constraint(equalToConstant: 1).isActive = true
         escape.view = spacer
@@ -98,7 +98,7 @@ final class TouchBarView: NSObject {
         rightSlot.spacing = 0
         rightSlot.alignment = .centerY
         rightSlot.detachesHiddenViews = true
-        let timelineItem = NSCustomTouchBarItem(identifier: .init("com.sezerbudak.MediaBar.timeline"))
+        let timelineItem = NSCustomTouchBarItem(identifier: .init("com.sezerbudak.MediaHub.timeline"))
         timelineItem.visibilityPriority = .high
         timelineItem.view = rightSlot
         bar.templateItems = [controls, escape, timelineItem]
