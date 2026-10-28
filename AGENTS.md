@@ -1,15 +1,15 @@
-# MediaBar çalışma kuralları
+# MediaBar development rules
 
-- Uygulamayı çalıştırma; Touch Bar paneli, pencere veya önizleme açarak test yapma.
-- Derleme ve uygulamayı açmayan, sistem medyasına erişmeyen mantık testleri yapılabilir.
-- Dosya değişikliklerinde Python kullanma.
-- Otomatik commit oluşturma. Kullanıcı commit isterse Conventional Commits kullan.
-- Touch Bar tasarımı ve görsel etkileşimleri yalnızca `MediaBar/TouchBarView.swift` içinde tut. Medya erişimini ve sistem paneli sunumunu bu dosyaya ekleme.
-- Menü çubuğu menüsünde `MediaBar` başlığı, `Touch Bar`, `Bildirimler` ve `Otomatik atlama` için işaretli aç/kapat seçenekleri, `Karalisteye ekle`, `Karalisteyi yönet` ve `Quit` olsun. Seçimler UserDefaults ile kaydedilsin; ilk kullanımda üç seçenek de açık olsun. Ana pencere, Dock simgesi, ayrı ayarlar penceresi veya otomatik başlatma ekleme. Parça değişiminde kamera hizasından açılan, odağı almayan geçici bildirim paneli kullanılabilir.
-- Karaliste `~/Library/Application Support/MediaBar/blacklist.json` dosyasında atomik kaydedilsin. Ekleme mevcut parçayı atlatmasın; filtre yeni parça çalmaya başladığında çalışsın. Sanatçı metnini bölme veya sıralama; yalnızca kaynak gerçek bir sanatçı dizisi sağlarsa ayrı sanatçı seçenekleri sun. Eşleşmede büyük/küçük harf ve dış boşluklar dışında metni koru. Sonsuz atlama döngüsü ve aynı parçaya tekrar komut gönderilmesini engelle.
-- Menü çubuğu simgesinin araç ipucu `MediaBar` olarak kalsın.
-- Arayüz Türkçe ve İngilizce desteklesin. Menüde yalnızca İngilizce / Türkçe seçimi olsun. İlk açılışta sistemin ana dilini seçip kaydet; desteklenmiyorsa İngilizce seç. Sonraki açılışlarda kaydedilen dili kullan. Kullanıcıya görünen metinleri yerelleştirme kaynaklarında tut.
-- Touch Bar’da şarkı adına dokunmak Music’i açmasın; favori, şarkı/sanatçı bilgisi ve iki karaliste düğmesini içeren işlem görünümünü açsın. Aynı alana tekrar dokunmak ana görünüme dönsün. Favori yalnızca işlem görünümünde bulunsun. Karaliste düğmeleri aynı kaydı ekleyip kaldırabilsin; sanatçı düğmesi gerçek dizinin ilk sanatçısını, dizi yoksa tam sanatçı metnini kullansın.
-- Yalnızca kullanıcının mevcut Mac’i hedefleniyor. Yayınlama ve dağıtım altyapısı ekleme.
-- Swift, Objective-C ve C tercih et; çalışma zamanında Perl, shell, AppleScript veya Python betikleri kullanma.
-- Referans `/Users/sezerbudak/Developer/personal/TouchBar` projesini değiştirme.
+- Do not launch the application or test by opening a Touch Bar panel, window, or preview.
+- Builds and logic tests that do not launch the application or access system media are allowed.
+- Do not use Python to modify files.
+- Do not create commits automatically. When the user requests a commit, use Conventional Commits.
+- Keep all Touch Bar layout, styling, and visual interactions in `MediaBar/TouchBarView.swift`. Do not add media access or system panel presentation to this file.
+- The menu bar menu must include the `MediaBar` heading; checked toggles for `Touch Bar`, `Notifications`, and `Automatic skipping`, in that order; `Add to blacklist`; `Manage blacklist`; the language submenu; and `Quit`. Save preferences in UserDefaults; all three feature toggles default to enabled. Do not add a main window, Dock icon, separate settings window, or automatic launch at login. A temporary notification panel that emerges near the camera without taking focus is allowed when the track changes.
+- Save the blacklist atomically to `~/Library/Application Support/MediaBar/blacklist.json`. Adding an entry must not skip the current track; evaluate the filter when a new track starts playing. Do not split or reorder artist text. Offer individual artist choices only when the source provides a genuine artist array. Matching must preserve text except for case and leading/trailing whitespace. Prevent infinite skipping loops and repeated commands for the same track.
+- Keep the menu bar icon tooltip set to `MediaBar`.
+- Support English and Turkish. The language menu must offer only English and Turkish. On first launch, select and save the system's primary language, falling back to English if unsupported. Use the saved language on subsequent launches. Keep user-facing strings in localization resources under stable keys.
+- Tapping the track title in the Touch Bar must open an action view rather than Music. This view contains a favorite button, track/artist information, and two blacklist buttons. Tapping the title again returns to the main view. Show the favorite button only in the action view. Blacklist buttons must toggle the same entry on and off. The artist button must use the first artist from a genuine array, or the complete artist text when no array is available.
+- The implementation currently targets the user's existing Mac. Do not add publishing or distribution infrastructure unless requested.
+- Prefer Swift, Objective-C, and C. Do not use Perl, shell, AppleScript, or Python scripts at runtime.
+- Do not modify the reference TouchBar project at `/Users/sezerbudak/Developer/personal/TouchBar`.

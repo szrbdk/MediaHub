@@ -1,64 +1,66 @@
 # MediaBar
 
-Bu Mac için geliştirilen, Swift/AppKit ve Objective-C ile yazılmış Touch Bar medya kontrol uygulaması. Xcode 27.1 ile derlenir; hedef macOS 27.0’dır.
+A native macOS Touch Bar media controller written in Swift/AppKit and Objective-C. The project builds with Xcode 27.1 and targets macOS 27.0. It currently targets the developer's Mac; compatibility with other systems has not been verified.
 
-Uygulama normal başlatıldığında kayıtlı tercihlere göre Touch Bar panelini ve parça bildirimlerini etkinleştirir. Menü çubuğunda **MediaBar** başlığı, **Touch Bar**, **Bildirimler** ve **Otomatik atlama** aç/kapat seçenekleri, **Karalisteye ekle**, **Karalisteyi yönet** ve **Quit** bulunur. Açık seçenekler işaretlidir. Seçimler UserDefaults ile kaydedilir ve sonraki açılışta korunur; kayıtlı tercih yoksa üç seçenek de açıktır. Simgenin araç ipucu uygulamanın adını gösterir. Ana pencere, Dock simgesi, otomatik başlatma veya ayrı ayarlar penceresi yoktur. Çıkışta paneller kapatılır, bekleyen sarma bitiş komutları gönderilir ve XPC bağlantısı kapatılır.
+Launching the application enables the Touch Bar panel and track notifications according to saved preferences. The menu bar menu contains the **MediaBar** heading, **Touch Bar**, **Notifications**, and **Automatic skipping** toggles, **Add to blacklist**, **Manage blacklist**, a **Language** submenu, and **Quit**. Enabled features have checkmarks. Preferences are saved in UserDefaults and restored on the next launch; all three feature toggles default to enabled. The icon tooltip shows the application name. There is no main window, Dock icon, automatic launch at login, or separate settings window. Quitting closes the panels, sends any pending end-seek commands, and closes the XPC connection.
 
-Bildirimleri kapatmak görünen kartı hemen gizler ve bekleyen kartları iptal eder. Yeniden açıldığında yalnızca sonraki parça değişimleri duyurulur. Touch Bar’ı kapatmak mevcut sarmayı sonlandırır ve sistemin normal Touch Bar görünümünü geri getirir; yeniden açmak paneli tekrar gösterir. İki seçenek birbirinden bağımsızdır.
+Disabling notifications immediately hides the visible card and cancels pending cards. Re-enabling them announces only subsequent track changes. Disabling the Touch Bar ends any active seek and restores the system's normal Touch Bar. Re-enabling it presents the panel again. These two settings are independent.
 
-## Yapı
+## Architecture
 
-- `MediaBar/TouchBarView.swift`: Tasarımın tamamı; ölçüler, renkler, düğmeler, kayan metin, ilerleme çizimi ve geniş sarma ekranı. Arayüz değişiklikleri bu dosyada yapılır.
-- `MediaBar/MediaController.swift`: Medya durumu, eylemler, süre yenilemesi ve favori isteklerinin yönetimi. Arayüz ile `MediaState` / `MediaAction` üzerinden konuşur.
-- `MediaBar/TouchBarPresenter.swift` ve `MediaBar/Native/TouchBarSystem.m`: Sistem genelinde Touch Bar sunumu ve uygulama/masaüstü/uyanma bildirimleri.
-- `MediaService`: MediaRemote’a doğrudan erişen Objective-C XPC servisi. Xcode tarafından derlenir ve uygulamanın `Contents/XPCServices` dizinine gömülür. Durum 0,5 saniyede bir alınır; süre gösterimi güncellemeler arasında yerel olarak ilerler.
-- `MediaBar/Native/MusicAutomation.m`: Music’e doğrudan Apple Events gönderir. AppleScript, Perl, shell veya başka bir yorumlayıcı kullanmaz. Favorileri 5 saniyede bir okur; düğme sadece favorilere ekler, kaldırmaz.
+- `MediaBar/TouchBarView.swift`: All Touch Bar design, including dimensions, colors, buttons, scrolling text, progress drawing, and the expanded seek view. Make Touch Bar UI changes in this file.
+- `MediaBar/MediaController.swift`: Media state, actions, timeline updates, and favorite requests. Communicates with the UI through `MediaState` and `MediaAction`.
+- `MediaBar/TouchBarPresenter.swift` and `MediaBar/Native/TouchBarSystem.m`: System-wide Touch Bar presentation and application, desktop, and wake notifications.
+- `MediaService`: An Objective-C XPC service that accesses MediaRemote directly. Xcode builds it and embeds it in the application's `Contents/XPCServices` directory. State is polled every 0.5 seconds; the displayed timeline advances locally between updates.
+- `MediaBar/Native/MusicAutomation.m`: Sends Apple Events directly to Music without AppleScript, Perl, shell, or another interpreter. Reads favorite status every five seconds. The favorite button adds a track to favorites; it does not remove it.
 
-Önceki/sonraki kontrolleri Podcasts’te 15 saniye geri/ileri çalışır. Uzun basmak sarma başlatır; bırakmak, bağlam değişimi veya 15 saniyelik güvenlik sınırı sarmayı bitirir. Süre alanına dokunmak geniş sarma ekranını açar; sürükleme bitince konum gönderilir. Süre alanına yeniden dokunmak normal görünüme döner. Şarkı adına dokunmak Music’i açmak yerine Touch Bar işlem görünümüne geçer: **favori → şarkı/sanatçı bilgisi → şarkı karaliste düğmesi → sanatçı karaliste düğmesi**. Şarkı adına tekrar dokunmak ana görünüme döner. Favori yalnızca bu görünümde ve Music için gösterilir. Karaliste düğmeleri tekrar dokununca kaydı kaldırır; engelli durum pembe renk ve metinle belirtilir. Sanatçı eylemi gerçek sanatçı dizisinin ilk ismini, dizi yoksa bölünmemiş sanatçı metnini kullanır. Ekleme/kaldırma mevcut parçayı atlatmaz. Parça değişiminde veya Touch Bar kapatıldığında işlem görünümü kapanır. Medya yoksa kontroller devre dışı kalır; süre bilgisi yoksa zaman alanı gizlenir.
+In Podcasts, the previous/next controls skip backward/forward by 15 seconds. Holding a transport button starts seeking; releasing it, changing context, or reaching the 15-second safety limit ends seeking. Tapping the time area opens the expanded seek view. Releasing a drag submits the new position. Tapping the time area again returns to the normal view.
 
-## Karaliste ve otomatik atlama
+Tapping the track title opens the Touch Bar action view instead of Music, with this order: **favorite → track/artist information → song blacklist button → artist blacklist button**. Tapping the title again returns to the main view. The favorite button appears only in this view and only for Music. Tapping a blacklist button again removes the entry; blocked entries are indicated by pink coloring and text. The artist action uses the first name in a genuine artist array, or the complete, unsplit artist text if no array is available. Adding or removing an entry does not skip the current track. The action view closes when the track changes or the Touch Bar is disabled. Controls are disabled when no media is available; the time area is hidden when timeline information is unavailable.
 
-**Karalisteye ekle** menüsünden mevcut şarkıyı (başlık + sanatçı metni) veya sanatçıyı kaydedebilirsiniz. Ekleme mevcut parçayı atlatmaz; aynı şarkı üzerinden birden fazla sanatçı eklenebilir. Zaten ekli seçenekler işaretli ve devre dışıdır. **Karalisteyi yönet** alt menüsünde bir kaydı seçmek onu kaldırır. Menü açıkken parça değişirse seçtiğiniz kayıt, menüde gösterilen parçaya ait kalır.
+## Blacklist and automatic skipping
 
-Sanatçı metni `&`, virgül veya `feat.` gibi işaretlerden bölünmez. `A&B&C` yalnızca aynı metinle eşleşir; `B&A&C` veya tek başına `B` eşleşmez. Büyük/küçük harf ve metnin başındaki/sonundaki boşluklar yok sayılır; iç boşluklar, noktalama ve sıralama korunur. Kaynak sanatçı alanını gerçek bir isim dizisi olarak verirse her sanatçı ayrı eklenebilir; bireysel engel dizideki o isimle veya tam eşleşen solo sanatçı metniyle eşleşir. Mevcut MediaRemote kaynağı çoğunlukla tek bir sanatçı metni sağlar. Menüde adlar **Şarkı** ve **Sanatçılar** bölüm başlıkları altında gösterilir. Albüm adı sanatçı bilgisi yerine engellemede kullanılmaz.
+Use **Add to blacklist** to save the current song (title and artist text) or artist. Adding an entry does not skip the current track, so you can add multiple artists from the same song. Existing entries are checked and disabled. Selecting an entry in **Manage blacklist** removes it. If the track changes while the menu is open, the selected entry still refers to the track displayed in that menu.
 
-Liste ilk eklemede `~/Library/Application Support/MediaBar/blacklist.json` konumuna atomik kaydedilir:
+Artist text is not split on `&`, commas, `feat.`, or similar markers. `A&B&C` matches only that text; it does not match `B&A&C` or `B` alone. Matching ignores case and leading/trailing whitespace while preserving internal whitespace, punctuation, and order. If the source provides the artist field as an actual array of names, each artist can be added separately. An individual artist entry matches that name in an array or an exactly matching solo artist string. The current MediaRemote source usually provides a single artist string. Names appear under **Song** and **Artists** section headings. Album names are never used as substitute artist information for matching.
+
+The first addition creates the list atomically at `~/Library/Application Support/MediaBar/blacklist.json`:
 
 ```json
 {
   "version": 1,
   "artists": [{ "name": "A&B&C", "match": "fullText" }],
-  "songs": [{ "title": "Şarkı adı", "artistText": "A&B&C" }]
+  "songs": [{ "title": "Song title", "artistText": "A&B&C" }]
 }
 ```
 
-Ayrı sanatçı kayıtlarının `match` değeri `individual` olur. Menü her açıldığında dosya yeniden okunur; elle düzenlemeler sonraki açılışta veya menü açılınca yüklenir. Bozuk veya desteklenmeyen sürümdeki dosya üzerine yazılmaz; menüde hata gösterilir ve otomatik filtre uygulanmaz. Yazma hatası kaydedilmemiş kaydı belleğe eklemez.
+Individual artist entries use `individual` as their `match` value. The file is reloaded whenever the menu opens. Manual edits are loaded on the next application launch or menu opening. Malformed files and unsupported versions are not overwritten; the menu displays an error and automatic filtering is not applied. A write failure does not add an unsaved entry to the in-memory list.
 
-Filtre yalnızca yeni bir parça çalmaya başladığında değerlendirilir. Uygulama açılırken zaten çalan parça, listeyi düzenlemek ve otomatik atlamayı yeniden açmak mevcut parçayı atlatmaz. Engelli yeni parçaya tek bir sonraki-parça komutu gönderilir ve o parçanın bildirimi gösterilmez. Komut başarısızsa aynı parçada tekrar tekrar denenmez. Art arda en fazla 10 parça atlanır; izinli bir parça, 30 saniyeden uzun bir ara veya seçeneği kapatıp açmak sınırı sıfırlar. Eşleşmeler yapay zekâ tespiti yapmaz; yalnızca kaydettiğiniz listeyi uygular.
+The filter runs only when a new track starts playing. Starting the application with a track already playing, editing the list, or re-enabling automatic skipping does not skip the current track. A newly started blocked track receives a single next-track command, and its notification is suppressed. Failed commands are not retried repeatedly for the same track. At most 10 consecutive tracks are skipped. An allowed track, a gap longer than 30 seconds, or toggling the feature off and on resets this limit. Matching does not detect AI-generated music; it only applies the entries you save.
 
-## Parça bildirim paneli
+## Track notification panel
 
-Yeni bir parça çalmaya başladığında ekranın üst ortasından bağımsız, koyu bir kart açılır; ekranın üstüne bağlanan siyah bir şerit yoktur. Şarkı adı, sanatçı ve varsa albüm adı gösterilir. Oynatıcı kapak verisi sağlıyorsa kapak, aksi halde dalga simgesi kullanılır. Sesli uyarı yoktur. Panel yaklaşık 3 saniye görünür, sonra yukarı kapanır. Aktif uygulamanın ekranı kullanılır; çentikli ekranlarda metin çentiğin altında konumlandırılır.
+When a new track starts playing, a standalone dark card emerges from the top center of the screen, without a black strip connecting it to the screen edge. It displays the track title, artist, and album name when available. Artwork is shown when supplied by the player; otherwise, a waveform icon is used. There is no notification sound. The panel remains visible for about three seconds before retracting upward. It uses the active application's screen; on a notched display, text is positioned below the notch.
 
-Kapak, MediaRemote’un `artworkData` alanından alınır; ağdan indirilmez. XPC servisi ImageIO ile en fazla 160 piksel boyutunda bir PNG üretip aynı parça için önbellekte tutar. Sonradan gelen kapak veya albüm bilgisi açık kartta güncellenir; yeni bildirim açılmaz ve görünme süresi uzatılmaz.
+Artwork comes from MediaRemote's `artworkData` field and is not downloaded from the network. The XPC service uses ImageIO to produce a PNG thumbnail up to 160 pixels in size and caches it for the current track. Late artwork or album information updates the visible card without creating another notification or extending its display time.
 
-`TrackNotificationPresenter.swift` odağı almayan ve tıklamaları engellemeyen bir `NSPanel` kullanır. Tüm Spaces ve diğer uygulamaların tam ekran alanlarına katılması için pencere davranışları ayarlanmıştır. Görsel tasarım `TrackNotificationView.swift` içindedir. Fiziksel tam ekran davranışı kullanıcı tarafından doğrulanmalıdır.
+`TrackNotificationPresenter.swift` uses an `NSPanel` that does not take focus or intercept clicks. Its window behaviors allow it to join all Spaces and other applications' full-screen spaces. The visual design lives in `TrackNotificationView.swift`. Actual full-screen behavior requires manual verification on the device.
 
-Başlangıçta zaten çalan parça, duraklat/devam et ve aynı parçaya yeniden bağlanma tekrar duyurulmaz. Hızlı değişimlerde son parça gösterilir; bildirim kuyruğu birikmez. Uyku, kilit ve ekran düzeni değişiminde panel kapatılır. Sistem bildirim izni istenmez ve Music’in kendi bildirim ayarları değiştirilmez; iki bildirim istemiyorsanız Music bildirimlerini Sistem Ayarları’ndan kapatabilirsiniz.
+An already-playing track at startup, pause/resume, and reconnecting to the same track do not trigger duplicate announcements. Rapid track changes show the latest track without accumulating a notification queue. Sleep, screen locking, and display layout changes dismiss the panel. The application does not request system notification permission or change Music's notification settings. To avoid duplicate notifications, you can disable Music notifications in System Settings.
 
-## Yerel sistem erişimi
+## Native system access
 
-MediaRemote’un macOS 15.4 sonrasındaki erişim denetimi nedeniyle servis kimliği `com.apple.sezerbudak.MediaBar.MediaService` olarak ayarlanmıştır. Ana uygulamanın kimliği `com.sezerbudak.MediaBar` olarak kalır. Bu yaklaşım [mediaremote-adapter’ın belgelenmiş kimlik denetimi davranışına](https://github.com/ungive/mediaremote-adapter#why-this-works) dayanır. Servis Apple tarafından sağlanan veya imzalanan bir bileşen değildir; bu projede yerel olarak derlenir.
+Because of MediaRemote access checks introduced after macOS 15.4, the service identifier is set to `com.apple.sezerbudak.MediaBar.MediaService`. The main application identifier remains `com.sezerbudak.MediaBar`. This approach follows the [documented identity-check behavior in mediaremote-adapter](https://github.com/ungive/mediaremote-adapter#why-this-works). The service is built locally as part of this project; it is not supplied or signed by Apple.
 
-Touch Bar sunumu da özel macOS API’lerini kullanır. Derleme ve paket doğrulaması, bu özel API’lerin cihaz üzerindeki çalışma doğrulaması değildir. Eksik semboller veya bağlantı hataları uygulamayı çökertmeden sistem günlüğüne yazılır; medya kontrolleri boş/devre dışı duruma döner. Betik tabanlı yedek yol yoktur.
+Touch Bar presentation also uses private macOS APIs. Successful builds and package checks do not verify these APIs on a device. Missing symbols or connection failures are logged without crashing the application; media controls return to an empty or disabled state. There is no script-based fallback.
 
-App Sandbox kapalıdır. Music’in favori özelliği ilk kullanımda macOS otomasyon izni gerektirebilir. Uygulama paketi izin açıklamasını ve Apple Events yetkisini içerir. Yayınlama, dağıtım veya açılış kaydı yapılmaz.
+App Sandbox is disabled. Music favorites may require macOS automation permission on first use. The application bundle includes the usage description and Apple Events entitlement. The project does not include publishing, distribution, or launch-at-login infrastructure.
 
-MediaRemote özel API bildirimleri `ungive/mediaremote-adapter` projesinin `0e82bf1c44ec39554fbfc402ec88a48c6ae2a0fd` sürümünden alınmıştır. BSD-3-Clause lisansı `MediaBar/Resources/MediaRemoteAdapter-LICENSE.txt` içinde tutulur ve uygulamaya kopyalanır. Eski TouchBar projesi değiştirilmez.
+MediaRemote private API declarations were taken from revision `0e82bf1c44ec39554fbfc402ec88a48c6ae2a0fd` of `ungive/mediaremote-adapter`. Its BSD-3-Clause license is preserved in `MediaBar/Resources/MediaRemoteAdapter-LICENSE.txt` and copied into the application bundle. The original TouchBar reference project is left unchanged.
 
-## Uygulamayı açmadan doğrulama
+## Verification without launching the application
 
-Uygulama simgesinin PNG boyutları ve menü çubuğunun tek renkli vektör PDF simgesi `Assets.xcassets` içinde bulunur. Tasarımın Swift/CoreGraphics kaynağı `Tools/GenerateIcons.swift` dosyasıdır. Yeniden üretmek için `xcrun swift -module-cache-path build/ModuleCache Tools/GenerateIcons.swift` kullanılabilir; bu işlem uygulamayı açmaz.
+Application icon PNG sizes and the monochrome menu bar vector PDF are stored in `Assets.xcassets`. Their Swift/CoreGraphics source is `Tools/GenerateIcons.swift`. Regenerate them with `xcrun swift -module-cache-path build/ModuleCache Tools/GenerateIcons.swift`; this does not launch the application.
 
 ```sh
 xcodebuild -project MediaBar.xcodeproj -scheme MediaBar -configuration Debug -derivedDataPath build/Verification CODE_SIGN_IDENTITY=- build
@@ -68,10 +70,10 @@ xcrun swiftc -module-cache-path build/ModuleCache MediaBar/Models/*.swift Tests/
 build/MediaBarModelTests
 ```
 
-Model testleri Foundation kullanır; MediaBar’ı veya XPC servisini başlatmaz, Touch Bar oluşturmaz ve Music’e erişmez. Süre/oynatma hızı, geçersiz veriler, sarma sınırları, oynatıcı/parça kimliği ve favori isteklerinin gecikmiş sonuçları kontrol edilir.
+Model tests use Foundation. They do not launch MediaBar or its XPC service, create a Touch Bar, or access Music. They cover timeline and playback rates, invalid data, seek boundaries, player/track identity, stale favorite request results, blacklist matching and storage, automatic skipping safeguards, preferences, and language selection.
 
-Fiziksel Touch Bar görünümü, Music/Podcasts ve diğer sistem oynatıcılarının verisi, otomasyon izni, uygulama geçişi/uyanma sonrası panel ve Quit sonrası eski Touch Bar’a dönüş kullanıcı tarafından doğrulanmalıdır. Geliştirme sırasında uygulama veya önizleme açılmaz.
+Physical Touch Bar appearance, media data from Music/Podcasts and other system players, automation permission, panel behavior after application changes or wake, and restoring the previous Touch Bar on Quit require manual verification. Do not launch the application or previews during automated development work.
 
-## Dil desteği
+## Language support
 
-Menüdeki dil seçimi **İngilizce** veya **Türkçe** olabilir. İlk kullanımda sistemin ana dili Türkçeyse Türkçe, diğer durumlarda İngilizce seçilir ve UserDefaults içine kaydedilir. Sonraki açılışlar kaydedilen dili kullanır. Seçim menü ile Touch Bar metinlerine yeniden başlatma gerektirmeden uygulanır. Çeviriler `MediaBar/Resources/en.lproj` ve `tr.lproj` içindedir; `menu.language` gibi sabit anahtarlar kullanılır. Şarkı ve sanatçı adları değiştirilmez. macOS otomasyon izin açıklamaları da iki dilde paketlenir; sistem izin penceresinin dilini macOS belirler.
+The language menu offers **English** and **Turkish**. On first launch, Turkish is selected when the system's primary language is Turkish; otherwise, English is selected. The choice is saved in UserDefaults. Subsequent launches use the saved language. Changes apply to menu and Touch Bar text without restarting the application. Translations live in `MediaBar/Resources/en.lproj` and `tr.lproj`, using stable keys such as `menu.language`. Track and artist names are not translated. macOS automation usage descriptions are also bundled in both languages; macOS determines the language of its system permission dialog.
