@@ -50,11 +50,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let notifications = NSMenuItem(title: L("menu.notifications"), action: #selector(toggleNotifications(_:)), keyEquivalent: "")
         notifications.target = self
         notifications.state = controller.notificationsEnabled ? .on : .off
-        menu.addItem(notifications)
         let touchBar = NSMenuItem(title: L("menu.touch_bar"), action: #selector(toggleTouchBar(_:)), keyEquivalent: "")
         touchBar.target = self
         touchBar.state = controller.touchBarEnabled ? .on : .off
         menu.addItem(touchBar)
+        menu.addItem(notifications)
         let autoSkip = NSMenuItem(title: L("menu.auto_skip"), action: #selector(toggleAutoSkip(_:)), keyEquivalent: "")
         autoSkip.target = self
         autoSkip.state = controller.autoSkipEnabled ? .on : .off
