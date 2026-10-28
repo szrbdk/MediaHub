@@ -1,87 +1,92 @@
-# MediaHub
+<p align="center">
+  <img src="MediaHub/Assets.xcassets/AppIcon.appiconset/icon_128x128@2x.png" alt="MediaHub icon" width="96" height="96">
+</p>
 
-Previously named MediaBar. Open `MediaHub.xcodeproj` and use the `MediaHub` scheme. The application identifier is `com.sezerbudak.MediaHub`. On first launch, saved language and feature preferences are imported from `com.sezerbudak.MediaBar` without replacing existing MediaHub preferences. If the new blacklist is absent, a valid `~/Library/Application Support/MediaBar/blacklist.json` is copied atomically to `~/Library/Application Support/MediaHub/blacklist.json`. The original file remains unchanged. The new application identity may require granting Music automation permission again.
+<h1 align="center">MediaHub</h1>
 
-A native macOS Touch Bar media controller written in Swift/AppKit and Objective-C. The project builds with Xcode 27.1 and targets macOS 27.0. It currently targets the developer's Mac; compatibility with other systems has not been verified.
+<p align="center">Your music, controls, and now-playing updates within reach.</p>
 
-Launching the application enables the Touch Bar panel and track notifications according to saved preferences. The menu bar menu contains the **MediaHub** heading, **Touch Bar**, **Notifications**, and **Automatic skipping** toggles, **Add to blacklist**, **Manage blacklist**, a **Language** submenu, and **Quit**. Enabled features have checkmarks. Preferences are saved in UserDefaults and restored on the next launch; all three feature toggles default to enabled. The icon tooltip shows the application name. There is no main window, Dock icon, automatic launch at login, or separate settings window. Quitting closes the panels, sends any pending end-seek commands, and closes the XPC connection.
+MediaHub is a native macOS menu bar app that brings playback controls to your Touch Bar, shows track updates near the camera, and automatically skips songs or artists you choose to block.
 
-Disabling notifications immediately hides the visible card and cancels pending cards. Re-enabling them announces only subsequent track changes. Disabling the Touch Bar ends any active seek and restores the system's normal Touch Bar. Re-enabling it presents the panel again. These two settings are independent.
+It stays out of your way: no main window, no Dock icon, and no need to switch away from what you are doing.
 
-## Architecture
+## What you can do
 
-- `MediaHub/TouchBarView.swift`: All Touch Bar design, including dimensions, colors, buttons, scrolling text, progress drawing, and the expanded seek view. Make Touch Bar UI changes in this file.
-- `MediaHub/MediaController.swift`: Media state, actions, timeline updates, and favorite requests. Communicates with the UI through `MediaState` and `MediaAction`.
-- `MediaHub/TouchBarPresenter.swift` and `MediaHub/Native/TouchBarSystem.m`: System-wide Touch Bar presentation and application, desktop, and wake notifications.
-- `MediaService`: An Objective-C XPC service that accesses MediaRemote directly. Xcode builds it and embeds it in the application's `Contents/XPCServices` directory. State is polled every 0.5 seconds; the displayed timeline advances locally between updates.
-- `MediaHub/Native/MusicAutomation.m`: Sends Apple Events directly to Music without AppleScript, Perl, shell, or another interpreter. Reads favorite status every five seconds while idle and supports explicit add/remove requests.
+- **Control playback from the Touch Bar.** Play, pause, change tracks, and seek without opening your player. Podcasts get 15-second skip controls.
+- **See what is playing.** A temporary card appears at the top of your screen when a track changes or playback is paused or resumed, with artwork, song, artist, and album information when available.
+- **Keep unwanted music out of your queue.** Block a song or artist and let automatic skipping handle future matches.
+- **Manage Music favorites.** Add or remove the current song from favorites directly from the Touch Bar.
+- **Choose your setup.** Enable Touch Bar controls, notifications, and automatic skipping independently. Use the app in English or Turkish.
 
-In Podcasts, the previous/next controls skip backward/forward by 15 seconds. Holding a transport button starts seeking; releasing it, changing context, or reaching the 15-second safety limit ends seeking. Tapping the time area opens the expanded seek view. Releasing a drag submits the new position. Tapping the time area again returns to the normal view.
+## Install
 
-Tapping the track title opens the Touch Bar action view instead of Music, with this order: **favorite → track/artist information → song blacklist button → artist blacklist button**. Tapping the title again returns to the main view. The favorite button appears only in this view and only for Music. Tapping a blacklist button again removes the entry; blocked entries are indicated by pink coloring and text. The artist action uses the first name in a genuine artist array, or the complete, unsplit artist text if no array is available. Adding or removing an entry does not skip the current track. The action view closes when the track changes or the Touch Bar is disabled. Controls are disabled when no media is available; the time area is hidden when timeline information is unavailable.
+**Requires macOS 27.0 or later.** Touch Bar controls require a MacBook Pro with a Touch Bar. The download contains both Apple Silicon and Intel binaries.
 
-## Favorites
+**[Download MediaHub 1.0.0](https://github.com/szrbdk/MediaHub/releases/download/v1.0.0/MediaHub-1.0.0.dmg)** · [All releases](https://github.com/szrbdk/MediaHub/releases)
 
-The favorite star toggles immediately when tapped, without waiting for Music. Tapping a filled star removes the track from favorites. The button is disabled until the operation is confirmed or fails; additional taps are ignored and never queued. There is no fixed two-second cooldown. A fast confirmation makes the button available immediately, while a slow request keeps it disabled.
+1. Download and open **MediaHub-1.0.0.dmg**.
+2. Drag **MediaHub** into **Applications**.
+3. Eject the disk image, then open MediaHub from Applications.
+4. Look for the MediaHub icon in your menu bar.
 
-Late replies and stale reads do not override the optimistic star. If the write reply still contains the previous state, the button stays disabled while verification runs for up to five seconds. Failure or confirmation timeout silently restores the last confirmed state and re-enables the button, without an error notification or automatic retry. Track changes clear pending state and invalidate old callbacks, so the new track can be used immediately.
+You do not need Xcode to use the app.
 
-## Blacklist and automatic skipping
+The download is ad-hoc signed and is not notarized by Apple. If macOS blocks the first launch and you trust this download, try opening the app, then use **System Settings → Privacy & Security → Open Anyway**. See [Apple’s instructions](https://support.apple.com/en-gb/102445).
 
-Use **Add to blacklist** to save the current song (title and artist text) or artist. Adding an entry does not skip the current track, so you can add multiple artists from the same song. Existing entries are checked and disabled. Selecting an entry in **Manage blacklist** removes it. If the track changes while the menu is open, the selected entry still refers to the track displayed in that menu.
+The menu bar menu is where you turn features on or off, manage your blacklist, change language, or quit. Your choices are remembered the next time you open the app. Touch Bar controls, notifications, and automatic skipping are all enabled initially.
 
-Artist text is not split on `&`, commas, `feat.`, or similar markers. `A&B&C` matches only that text; it does not match `B&A&C` or `B` alone. Matching ignores case and leading/trailing whitespace while preserving internal whitespace, punctuation, and order. If the source provides the artist field as an actual array of names, each artist can be added separately. An individual artist entry matches that name in an array or an exactly matching solo artist string. The current MediaRemote source usually provides a single artist string. Names appear under **Song** and **Artists** section headings. Album names are never used as substitute artist information for matching.
+MediaHub starts when you open it; it does not add itself to your login items.
 
-The first addition creates the list atomically at `~/Library/Application Support/MediaHub/blacklist.json`:
+## Using the Touch Bar
 
-```json
-{
-  "version": 1,
-  "artists": [{ "name": "A&B&C", "match": "fullText" }],
-  "songs": [{ "title": "Song title", "artistText": "A&B&C" }]
-}
+Use the playback buttons to play, pause, or move between tracks. Hold the previous or next button to seek.
+
+**Tap the time display** to open a larger seek bar. Drag to preview a position, then release to jump there. Tap the time display again to return.
+
+**Tap the song title** to open its actions:
+
+**Favorite → Song and artist → Block song → Block artist**
+
+Tap the title again to return to the playback controls. Tap a highlighted blacklist button again to undo an accidental block.
+
+The favorite button is available for Music. The star changes immediately when tapped, and the button stays disabled while Music confirms the change. If the request fails, the star returns to its previous confirmed state.
+
+## Block songs and artists
+
+Open **Add to blacklist** in the menu bar to block the current song or an artist. You can also use the buttons in the Touch Bar song actions. Adding an entry leaves the current song playing; automatic skipping applies when a new track starts.
+
+Open **Manage blacklist** and select an entry to remove it. Turn off **Automatic skipping** whenever you want to listen without the filter.
+
+Matching uses the song title and artist credit, or the artist name you selected. It ignores capitalization and surrounding spaces, but otherwise requires an exact match. Combined artist credits are kept together unless the player supplies separate artist names. For example, blocking `A & B` does not also block solo songs by `A` or credits written as `B & A`.
+
+Automatic skipping stops after 10 consecutive skips to avoid getting stuck in a blocked queue. Toggle it off and on to reset the limit.
+
+## Now-playing notifications
+
+A quiet card slides down near the camera, stays visible for a few seconds, and disappears without taking focus. A small play/pause badge shows the playback state. The panel is designed to appear over full-screen apps too.
+
+Turn **Notifications** off in the menu bar to hide it. MediaHub does not change Music's own notification settings; you can disable those separately in System Settings if you see both.
+
+## Language and saved preferences
+
+MediaHub supports **English** and **Turkish**. On first launch, it selects Turkish if that is your system's primary language, or English otherwise. Choose either language from the **Language** menu at any time; the change applies immediately and is remembered.
+
+Your blacklist is stored locally at:
+
+```text
+~/Library/Application Support/MediaHub/blacklist.json
 ```
 
-Individual artist entries use `individual` as their `match` value. The file is reloaded whenever the menu opens. Manual edits are loaded on the next application launch or menu opening. Malformed files and unsupported versions are not overwritten; the menu displays an error and automatic filtering is not applied. A write failure does not add an unsaved entry to the in-memory list.
+## Permissions and compatibility
 
-The filter runs only when a new track starts playing. Starting the application with a track already playing, editing the list, or re-enabling automatic skipping does not skip the current track. A newly started blocked track receives a single next-track command, and its notification is suppressed. Failed commands are not retried repeatedly for the same track. At most 10 consecutive tracks are skipped. An allowed track, a gap longer than 30 seconds, or toggling the feature off and on resets this limit. Matching does not detect AI-generated music; it only applies the entries you save.
+macOS may ask you to allow MediaHub to control Music when you use favorites. Grant that permission to enable adding and removing favorites.
 
-## Track notification panel
+Available controls, artwork, and track information depend on what the player provides. MediaHub uses private macOS APIs for system media access and Touch Bar presentation, so system updates may affect these features.
 
-When a new track starts playing or playback is paused or resumed, a standalone dark card emerges from the top center of the screen, without a black strip connecting it to the screen edge. It displays the track title, artist, and album name when available. Artwork is shown when supplied by the player; otherwise, a waveform icon is used. A small play/pause badge indicates the playback state. There is no notification sound. The panel remains visible for about three seconds before retracting upward. It uses the active application's screen; on a notched display, text is positioned below the notch.
+## License
 
-Artwork comes from MediaRemote's `artworkData` field and is not downloaded from the network. The XPC service uses ImageIO to produce a PNG thumbnail up to 160 pixels in size and caches it for the current track. Late artwork or album information updates the visible card without creating another notification or extending its display time.
+MediaHub is available under the [MIT License](LICENSE). Copyright © 2026 Sezer Budak.
 
-`TrackNotificationPresenter.swift` uses an `NSPanel` that does not take focus or intercept clicks. Its window behaviors allow it to join all Spaces and other applications' full-screen spaces. The visual design lives in `TrackNotificationView.swift`. Actual full-screen behavior requires manual verification on the device.
+## Acknowledgments
 
-The initial playback state at startup, repeated snapshots, and reconnecting to the same track without a playback change do not trigger duplicate announcements. Each observed pause or resume is announced once; transitions seen while notifications are disabled are not replayed when re-enabled. Rapid track changes show the latest track without accumulating a notification queue. Sleep, screen locking, and display layout changes dismiss the panel. The application does not request system notification permission or change Music's notification settings. To avoid duplicate notifications, you can disable Music notifications in System Settings.
-
-## Native system access
-
-Because of MediaRemote access checks introduced after macOS 15.4, the service identifier is set to `com.apple.sezerbudak.MediaHub.MediaService`. The main application identifier remains `com.sezerbudak.MediaHub`. This approach follows the [documented identity-check behavior in mediaremote-adapter](https://github.com/ungive/mediaremote-adapter#why-this-works). The service is built locally as part of this project; it is not supplied or signed by Apple.
-
-Touch Bar presentation also uses private macOS APIs. Successful builds and package checks do not verify these APIs on a device. Missing symbols or connection failures are logged without crashing the application; media controls return to an empty or disabled state. There is no script-based fallback.
-
-App Sandbox is disabled. Music favorites may require macOS automation permission on first use. The application bundle includes the usage description and Apple Events entitlement. The project does not include publishing, distribution, or launch-at-login infrastructure.
-
-MediaRemote private API declarations were taken from revision `0e82bf1c44ec39554fbfc402ec88a48c6ae2a0fd` of `ungive/mediaremote-adapter`. Its BSD-3-Clause license is preserved in `MediaHub/Resources/MediaRemoteAdapter-LICENSE.txt` and copied into the application bundle. The original TouchBar reference project is left unchanged.
-
-## Verification without launching the application
-
-Application icon PNG sizes and the monochrome menu bar vector PDF are stored in `Assets.xcassets`. Their Swift/CoreGraphics source is `Tools/GenerateIcons.swift`. Regenerate them with `xcrun swift -module-cache-path build/ModuleCache Tools/GenerateIcons.swift`; this does not launch the application.
-
-```sh
-xcodebuild -project MediaHub.xcodeproj -scheme MediaHub -configuration Debug -derivedDataPath build/Verification CODE_SIGN_IDENTITY=- build
-xcodebuild -project MediaHub.xcodeproj -scheme MediaHub -configuration Release -derivedDataPath build/Verification CODE_SIGN_IDENTITY=- build
-
-xcrun swiftc -module-cache-path build/ModuleCache MediaHub/Models/*.swift Tests/main.swift -o build/MediaHubModelTests
-build/MediaHubModelTests
-```
-
-Model tests use Foundation. They do not launch MediaHub or its XPC service, create a Touch Bar, or access Music. They cover timeline and playback rates, invalid data, seek boundaries, player/track identity, stale favorite request results, blacklist matching and storage, automatic skipping safeguards, preferences, and language selection.
-
-Physical Touch Bar appearance, media data from Music/Podcasts and other system players, automation permission, panel behavior after application changes or wake, and restoring the previous Touch Bar on Quit require manual verification. Do not launch the application or previews during automated development work.
-
-## Language support
-
-The language menu offers **English** and **Turkish**. On first launch, Turkish is selected when the system's primary language is Turkish; otherwise, English is selected. The choice is saved in UserDefaults. Subsequent launches use the saved language. Changes apply to menu and Touch Bar text without restarting the application. Translations live in `MediaHub/Resources/en.lproj` and `tr.lproj`, using stable keys such as `menu.language`. Track and artist names are not translated. macOS automation usage descriptions are also bundled in both languages; macOS determines the language of its system permission dialog.
+MediaHub includes MediaRemote API declarations from [ungive/mediaremote-adapter](https://github.com/ungive/mediaremote-adapter), used under the BSD-3-Clause license. The [third-party license](MediaHub/Resources/MediaRemoteAdapter-LICENSE.txt) is included in the repository and application bundle.

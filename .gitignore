@@ -23,3 +23,6 @@ DerivedData/
 
 # Local development instructions
 /AGENTS.md
+
+# Release packages
+/dist/
