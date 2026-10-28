@@ -6,6 +6,7 @@ struct TrackAnnouncement: Equatable {
     let bundleIdentifier: String
     let album: String
     let artworkData: Data?
+    let playing: Bool
 
     init(state: MediaState) {
         title = state.title
@@ -13,6 +14,7 @@ struct TrackAnnouncement: Equatable {
         bundleIdentifier = state.bundleIdentifier
         album = state.album
         artworkData = state.artworkData
+        playing = state.playing
     }
 
     func hasSameTrack(as other: TrackAnnouncement) -> Bool {
@@ -20,8 +22,8 @@ struct TrackAnnouncement: Equatable {
     }
 }
 
-/// Observe successful media reads only. Pause/resume, reconnects, and metadata
-/// ID changes must not repeatedly announce the same visible song information.
+/// Observe successful media reads only. Announce playback transitions once,
+/// preserving the last known state across transient missing-media snapshots.
 struct TrackAnnouncementState {
     private var initialized = false
     private var lastAnnouncement: TrackAnnouncement?
@@ -33,9 +35,11 @@ struct TrackAnnouncementState {
             lastAnnouncement = candidate
             return nil
         }
-        guard state.playing, let candidate else { return nil }
-        if let lastAnnouncement, candidate.hasSameTrack(as: lastAnnouncement) { return nil }
+        guard let candidate else { return nil }
+        let sameTrack = lastAnnouncement.map { candidate.hasSameTrack(as: $0) } ?? false
+        let playbackChanged = sameTrack && candidate.playing != lastAnnouncement?.playing
         lastAnnouncement = candidate
+        guard playbackChanged || (!sameTrack && candidate.playing) else { return nil }
         return enabled ? candidate : nil
     }
 }

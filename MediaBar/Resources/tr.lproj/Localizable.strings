@@ -37,6 +37,7 @@
 "touchbar.close_seek" = "Sarma ekranını kapat";
 "touchbar.playback_position" = "Oynatma konumu";
 "notification.now_playing" = "Şimdi çalıyor";
+"notification.paused" = "Duraklatıldı";
 "error.skip_limit" = "Otomatik atlama sınırına ulaşıldı (10 parça).";
 "error.skip_failed" = "Karalistedeki parça atlanamadı.";
 "error.blacklist_version" = "Karaliste dosyasının sürümü desteklenmiyor.";

@@ -37,6 +37,7 @@
 "touchbar.close_seek" = "Close seek view";
 "touchbar.playback_position" = "Playback position";
 "notification.now_playing" = "Now playing";
+"notification.paused" = "Paused";
 "error.skip_limit" = "Automatic skipping limit reached (10 tracks).";
 "error.skip_failed" = "Could not skip the blacklisted track.";
 "error.blacklist_version" = "This blacklist file version is not supported.";

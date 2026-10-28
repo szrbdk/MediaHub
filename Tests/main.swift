@@ -216,8 +216,10 @@ expect(announcements.observe(music) == nil, "Startup must not announce an alread
 expect(announcements.observe(music) == nil, "Repeated snapshots must not announce the same track")
 var pausedMusic = music
 pausedMusic.playing = false
-expect(announcements.observe(pausedMusic) == nil, "Pausing must not announce a track")
-expect(announcements.observe(music) == nil, "Resuming the same track must not announce it again")
+expect(announcements.observe(pausedMusic)?.playing == false, "Pausing must announce the paused state")
+expect(announcements.observe(pausedMusic) == nil, "Repeated paused snapshots must stay quiet")
+expect(announcements.observe(music)?.playing == true, "Resuming must announce the playing state")
+expect(announcements.observe(music) == nil, "Repeated playing snapshots must stay quiet")
 var newMetadataID = payload()
 newMetadataID["uniqueIdentifier"] = "late-id"
 expect(announcements.observe(MediaState(payload: newMetadataID)) == nil, "An ID update with unchanged song information must not announce again")
@@ -237,6 +239,17 @@ expect(announcements.observe(music)?.title == music.title, "Returning to an earl
 var initiallyIdle = TrackAnnouncementState()
 expect(initiallyIdle.observe(MediaState()) == nil, "An idle launch must remain quiet")
 expect(initiallyIdle.observe(music) != nil, "Starting playback after an idle launch must announce the first track")
+var initiallyPaused = TrackAnnouncementState()
+expect(initiallyPaused.observe(pausedMusic) == nil, "Launching with paused media must stay quiet")
+expect(initiallyPaused.observe(music)?.playing == true, "Resuming after a paused launch must announce")
+var mutedPlayback = TrackAnnouncementState()
+_ = mutedPlayback.observe(music)
+expect(mutedPlayback.observe(pausedMusic, enabled: false) == nil, "Disabled notifications must consume pause transitions silently")
+expect(mutedPlayback.observe(pausedMusic) == nil, "Re-enabling must not replay a suppressed pause")
+expect(mutedPlayback.observe(music)?.playing == true, "The next resume must announce after re-enabling")
+expect(mutedPlayback.observe(MediaState()) == nil, "Transient missing media must stay quiet")
+expect(mutedPlayback.observe(music) == nil, "Reconnect without a playback change must stay quiet")
+expect(mutedPlayback.observe(pausedMusic)?.playing == false, "Pause after reconnect must still announce")
 
 var coverPayload = nextPayload
 let coverBytes = Data([1, 2, 3, 4])

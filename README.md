@@ -46,13 +46,13 @@ The filter runs only when a new track starts playing. Starting the application w
 
 ## Track notification panel
 
-When a new track starts playing, a standalone dark card emerges from the top center of the screen, without a black strip connecting it to the screen edge. It displays the track title, artist, and album name when available. Artwork is shown when supplied by the player; otherwise, a waveform icon is used. There is no notification sound. The panel remains visible for about three seconds before retracting upward. It uses the active application's screen; on a notched display, text is positioned below the notch.
+When a new track starts playing or playback is paused or resumed, a standalone dark card emerges from the top center of the screen, without a black strip connecting it to the screen edge. It displays the track title, artist, and album name when available. Artwork is shown when supplied by the player; otherwise, a waveform icon is used. A small play/pause badge indicates the playback state. There is no notification sound. The panel remains visible for about three seconds before retracting upward. It uses the active application's screen; on a notched display, text is positioned below the notch.
 
 Artwork comes from MediaRemote's `artworkData` field and is not downloaded from the network. The XPC service uses ImageIO to produce a PNG thumbnail up to 160 pixels in size and caches it for the current track. Late artwork or album information updates the visible card without creating another notification or extending its display time.
 
 `TrackNotificationPresenter.swift` uses an `NSPanel` that does not take focus or intercept clicks. Its window behaviors allow it to join all Spaces and other applications' full-screen spaces. The visual design lives in `TrackNotificationView.swift`. Actual full-screen behavior requires manual verification on the device.
 
-An already-playing track at startup, pause/resume, and reconnecting to the same track do not trigger duplicate announcements. Rapid track changes show the latest track without accumulating a notification queue. Sleep, screen locking, and display layout changes dismiss the panel. The application does not request system notification permission or change Music's notification settings. To avoid duplicate notifications, you can disable Music notifications in System Settings.
+The initial playback state at startup, repeated snapshots, and reconnecting to the same track without a playback change do not trigger duplicate announcements. Each observed pause or resume is announced once; transitions seen while notifications are disabled are not replayed when re-enabled. Rapid track changes show the latest track without accumulating a notification queue. Sleep, screen locking, and display layout changes dismiss the panel. The application does not request system notification permission or change Music's notification settings. To avoid duplicate notifications, you can disable Music notifications in System Settings.
 
 ## Native system access
 

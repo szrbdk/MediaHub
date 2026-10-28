@@ -3,6 +3,7 @@ import AppKit
 /// Camera-aligned notification artwork and typography. No media access here.
 final class TrackNotificationView: NSView {
     private let symbol = NSImageView()
+    private let playbackSymbol = NSImageView()
     private let titleLabel = NSTextField(labelWithString: "")
     private let artistLabel = NSTextField(labelWithString: "")
     private let albumLabel = NSTextField(labelWithString: "")
@@ -32,6 +33,14 @@ final class TrackNotificationView: NSView {
         }
         symbol.setAccessibilityElement(false)
         addSubview(symbol)
+        playbackSymbol.wantsLayer = true
+        playbackSymbol.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.85).cgColor
+        playbackSymbol.layer?.cornerRadius = 10
+        playbackSymbol.contentTintColor = .white
+        playbackSymbol.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 10, weight: .semibold)
+        playbackSymbol.imageScaling = .scaleProportionallyDown
+        playbackSymbol.setAccessibilityElement(false)
+        addSubview(playbackSymbol)
         setAccessibilityElement(true)
         setAccessibilityRole(.staticText)
         setAccessibilityLabel(L("notification.now_playing"))
@@ -40,7 +49,9 @@ final class TrackNotificationView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func update(_ announcement: TrackAnnouncement) {
-        setAccessibilityLabel(L("notification.now_playing"))
+        setAccessibilityLabel(L(announcement.playing ? "notification.now_playing" : "notification.paused"))
+        playbackSymbol.image = NSImage(systemSymbolName: announcement.playing ? "play.fill" : "pause.fill",
+                                       accessibilityDescription: nil)
         titleLabel.stringValue = announcement.title
         artistLabel.stringValue = announcement.artist
         artistLabel.isHidden = announcement.artist.isEmpty
@@ -73,6 +84,7 @@ final class TrackNotificationView: NSView {
     override func layout() {
         super.layout()
         symbol.frame = hasArtwork ? coverFrame : coverFrame.insetBy(dx: 16, dy: 16)
+        playbackSymbol.frame = NSRect(x: coverFrame.maxX - 16, y: coverFrame.minY - 4, width: 20, height: 20)
         let textX = coverFrame.maxX + 16
         let textWidth = max(1, card.maxX - textX - 20)
         var rows: [(NSTextField, CGFloat)] = [(titleLabel, 22)]
