@@ -28,8 +28,6 @@ final class TouchBarView: NSObject {
     private let seekSurface = SeekSurface(frame: .zero)
     private let seekTimeBadge = SeekTimeBadge(frame: .zero)
     private var seekWidth: NSLayoutConstraint!
-    private var progressAnimationTimer: Timer?
-    private var lastScrubFrameAt: Double?
     private var lastCompactFrameAt: Double?
     private var compactTimeText = ""
     private var compactTimePending = false
@@ -334,12 +332,11 @@ final class TouchBarView: NSObject {
 
     func refreshProgress() {
         timelineView.isHidden = !state.timeline.isValid
-        guard state.timeline.isValid else { updateProgressAnimation(); return }
+        guard state.timeline.isValid else { return }
         if presented && !scrubOpen && !detailsOpen { refreshCompactProgress() }
         if scrubOpen && !seekSurface.isDragging {
             refreshSeekProgress()
         }
-        updateProgressAnimation()
     }
 
     private func refreshCompactProgress() {
@@ -384,49 +381,20 @@ final class TouchBarView: NSObject {
 
     private func refreshSeekProgress() {
         guard scrubOpen, !scrubClosing, state.timeline.isValid, !seekSurface.isDragging else { return }
-        let now = CACurrentMediaTime()
         let position = state.timeline.position(at: Date().timeIntervalSince1970)
         let target = position / state.timeline.duration
-        let canSmooth = presented && state.timeline.isAdvancing
-            && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        if canSmooth, let lastScrubFrameAt, now - lastScrubFrameAt < 0.2 {
-            // A short, time-based filter absorbs small metadata corrections.
-            // Finger gestures and released seek targets always bypass it.
-            let weight = 1 - exp(-max(0, now - lastScrubFrameAt) / 0.06)
-            seekSurface.fraction += (target - seekSurface.fraction) * weight
-        } else {
-            seekSurface.fraction = target
-        }
-        lastScrubFrameAt = now
+        // Playback snapshots update the ruler; finger gestures still update it
+        // immediately through SeekSurface without a repeating frame timer.
+        seekSurface.fraction = target
         updateSeekTime(position: position, emphasized: state.seekPending)
-    }
-
-    private func updateProgressAnimation() {
-        let shouldAnimate = presented && scrubOpen && !scrubClosing && !detailsOpen
-            && state.timeline.isAdvancing
-            && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        guard shouldAnimate else {
-            progressAnimationTimer?.invalidate()
-            progressAnimationTimer = nil
-            lastScrubFrameAt = nil
-            lastCompactFrameAt = nil
-            return
-        }
-        guard progressAnimationTimer == nil else { return }
-        // The compact bar uses incoming timeline snapshots. Only the expanded
-        // scrubber needs continuous frames, while the user is interacting.
-        let timer = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            self.refreshSeekProgress()
-        }
-        timer.tolerance = 0.002
-        RunLoop.main.add(timer, forMode: .common)
-        progressAnimationTimer = timer
     }
 
     private func updateSeekTime(position: Double, emphasized: Bool) {
         seekTimeBadge.update(position: position, duration: state.timeline.duration, emphasized: emphasized)
-        seekSurface.setAccessibilityValue(timeText(position))
+        let text = timeText(position)
+        if seekSurface.accessibilityValue() as? String != text {
+            seekSurface.setAccessibilityValue(text)
+        }
     }
 
     private func timeText(_ position: Double) -> String {
@@ -451,7 +419,6 @@ final class TouchBarView: NSObject {
         scrubCloseGeneration += 1
         if animated, presented, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             scrubClosing = true
-            updateProgressAnimation()
             seekSurface.cancelInteraction()
             animateScrubViews([(seekSurface, 16), (expandedTime, 6)], appearing: false, duration: 0.16)
             let generation = scrubCloseGeneration
@@ -467,7 +434,6 @@ final class TouchBarView: NSObject {
         scrubCloseWork = nil
         scrubClosing = false
         scrubOpen = false
-        updateProgressAnimation()
         seekSurface.cancelInteraction()
         updateModeViews()
     }
@@ -491,7 +457,6 @@ final class TouchBarView: NSObject {
         }
         titleLabel.animationsEnabled = presented && !scrubOpen && !detailsOpen
         detailsTitle.animationsEnabled = presented && detailsOpen
-        updateProgressAnimation()
         resizeContentToAvailableWidth()
         if animateOpening, presented, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             let views: [(NSView, Double)] = detailsOpen
@@ -525,7 +490,6 @@ final class TouchBarView: NSObject {
     func setPresented(_ visible: Bool) {
         presented = visible
         if !visible { closeScrubber(); closeDetails() }
-        updateProgressAnimation()
         titleLabel.animationsEnabled = visible && !scrubOpen && !detailsOpen
         detailsTitle.animationsEnabled = visible && detailsOpen
         if visible { refreshProgress() }
@@ -787,6 +751,8 @@ final class MarqueeLabel: NSTextField {
 private final class SeekTimeBadge: NSView {
     private let label = NSTextField(labelWithString: "")
     private let timeFont = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+    private var displayedText = ""
+    private var displayedEmphasis = false
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -810,31 +776,33 @@ private final class SeekTimeBadge: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func update(position: Double, duration: Double, emphasized: Bool) {
+        let positionText = PlaybackTimeline.format(position)
+        let durationText = " / \(PlaybackTimeline.format(duration))"
+        let value = positionText + durationText
+        guard value != displayedText || emphasized != displayedEmphasis else { return }
+        displayedText = value
+        displayedEmphasis = emphasized
         let font = timeFont
         let normalColor = NSColor(white: 0.62, alpha: 1)
-        let text = NSMutableAttributedString(string: PlaybackTimeline.format(position), attributes: [
+        let text = NSMutableAttributedString(string: positionText, attributes: [
             .font: font, .foregroundColor: emphasized ? NSColor.systemPink : normalColor
         ])
-        text.append(NSAttributedString(string: " / \(PlaybackTimeline.format(duration))", attributes: [
+        text.append(NSAttributedString(string: durationText, attributes: [
             .font: font, .foregroundColor: normalColor
         ]))
-        // The playhead moves every frame; time text changes only each second
-        // or when the drag/confirmation highlight changes.
-        if !label.attributedStringValue.isEqual(to: text) {
-            label.attributedStringValue = text
-            setAccessibilityValue(text.string)
-        }
+        label.attributedStringValue = text
+        setAccessibilityValue(value)
     }
 }
 
 /// A large direct-touch target for the expanded seek screen. Dragging previews;
 /// only releasing a successful gesture sends a seek command.
 final class SeekSurface: NSView, NSGestureRecognizerDelegate {
-    var fraction: Double = 0 { didSet { needsDisplay = true } }
+    var fraction: Double = 0 { didSet { if fraction != oldValue { needsDisplay = true } } }
     var onPreview: ((Double) -> Void)?
     var onCommit: ((Double) -> Void)?
     var onCancel: (() -> Void)?
-    private(set) var isDragging = false { didSet { needsDisplay = true } }
+    private(set) var isDragging = false { didSet { if isDragging != oldValue { needsDisplay = true } } }
     private var pan: NSPanGestureRecognizer!
 
     func cancelInteraction() {
