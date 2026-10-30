@@ -32,7 +32,6 @@ final class MediaController {
     private var nextFavoriteVerificationAt: Double = 0
     private var pollTimer: Timer?
     private var favoriteTimer: Timer?
-    private var progressTimer: Timer?
     private var holdTimer: Timer?
     private var seekingEndCommand: Int?
     private var readBusy = false
@@ -51,7 +50,6 @@ final class MediaController {
         trackNotifications.setEnabled(notificationsEnabled)
         trackNotifications.start()
         pollTimer = timer(interval: 0.5) { [weak self] in self?.readState() }
-        progressTimer = timer(interval: 0.5) { [weak self] in self?.view.refreshProgress() }
         favoriteTimer = timer(interval: 5) { [weak self] in self?.readFavorite() }
         readState()
     }
@@ -294,7 +292,7 @@ final class MediaController {
         revision += 1
         seekRequest.reset()
         music.cancelPendingRequests()
-        [pollTimer, progressTimer, favoriteTimer, favoriteActivityTimer].forEach { $0?.invalidate() }
+        [pollTimer, favoriteTimer, favoriteActivityTimer].forEach { $0?.invalidate() }
         favoriteRequest = FavoriteRequestState()
         presenter.stop()
         trackNotifications.stop()

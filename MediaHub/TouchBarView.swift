@@ -7,6 +7,7 @@ final class TouchBarView: NSObject {
     let bar = NSTouchBar()
     var onAction: ((MediaAction) -> Void)?
     private var state = MediaState()
+    private var renderedLanguage: AppLanguage?
     private var presented = false
     private var scrubOpen = false
     private var detailsOpen = false
@@ -249,11 +250,26 @@ final class TouchBarView: NSObject {
     }
 
     func render(_ newState: MediaState) {
+        // Timeline snapshots arrive twice a second. Rebuild controls and text
+        // only when their visible content changes, including a language switch.
+        let language = Localization.shared.language
+        let contentChanged = renderedLanguage != language
+            || state.trackKey != newState.trackKey
+            || state.title != newState.title || state.artist != newState.artist
+            || state.artistText != newState.artistText || state.artistNames != newState.artistNames
+            || state.bundleIdentifier != newState.bundleIdentifier
+            || state.playing != newState.playing
+            || state.favorite != newState.favorite || state.favoritePending != newState.favoritePending
+            || state.canEditBlacklist != newState.canEditBlacklist
+            || state.songBlacklisted != newState.songBlacklisted
+            || state.primaryArtistBlacklisted != newState.primaryArtistBlacklisted
         let animateTitleChange = state.hasMedia && newState.hasMedia && newState.trackKey != state.trackKey
         if newState.trackKey != state.trackKey { lastCompactFrameAt = nil }
         if newState.trackKey != state.trackKey || !newState.timeline.isValid { closeScrubber() }
         if newState.trackKey != state.trackKey || !newState.hasMedia { closeDetails() }
         state = newState
+        guard contentChanged else { refreshProgress(); return }
+        renderedLanguage = language
         timelineView.toolTip = L("touchbar.open_seek_hint")
         progressView.setAccessibilityLabel(L("touchbar.playback_progress"))
         [backButton, playButton, nextButton].forEach { $0?.isEnabled = state.hasMedia }
@@ -319,7 +335,7 @@ final class TouchBarView: NSObject {
     func refreshProgress() {
         timelineView.isHidden = !state.timeline.isValid
         guard state.timeline.isValid else { updateProgressAnimation(); return }
-        refreshCompactProgress()
+        if presented && !scrubOpen && !detailsOpen { refreshCompactProgress() }
         if scrubOpen && !seekSurface.isDragging {
             refreshSeekProgress()
         }
@@ -386,7 +402,7 @@ final class TouchBarView: NSObject {
     }
 
     private func updateProgressAnimation() {
-        let shouldAnimate = presented && !scrubClosing && !detailsOpen
+        let shouldAnimate = presented && scrubOpen && !scrubClosing && !detailsOpen
             && state.timeline.isAdvancing
             && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         guard shouldAnimate else {
@@ -397,12 +413,11 @@ final class TouchBarView: NSObject {
             return
         }
         guard progressAnimationTimer == nil else { return }
-        // Share one frame timer between the compact and expanded surfaces.
-        // Hidden surfaces and the media polling rate are left untouched.
-        let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
+        // The compact bar uses incoming timeline snapshots. Only the expanded
+        // scrubber needs continuous frames, while the user is interacting.
+        let timer = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
             guard let self else { return }
-            if self.scrubOpen { self.refreshSeekProgress() }
-            else { self.refreshCompactProgress() }
+            self.refreshSeekProgress()
         }
         timer.tolerance = 0.002
         RunLoop.main.add(timer, forMode: .common)
@@ -513,6 +528,7 @@ final class TouchBarView: NSObject {
         updateProgressAnimation()
         titleLabel.animationsEnabled = visible && !scrubOpen && !detailsOpen
         detailsTitle.animationsEnabled = visible && detailsOpen
+        if visible { refreshProgress() }
         scheduleSongSizing()
     }
 
@@ -635,7 +651,7 @@ final class LayoutReportingStack: NSStackView {
 
 /// Only overflowing labels animate. Short labels keep their original intrinsic size.
 final class MarqueeLabel: NSTextField {
-    var animationsEnabled = false { didSet { updateAnimation() } }
+    var animationsEnabled = false { didSet { if animationsEnabled != oldValue { updateAnimation() } } }
     private var animationTimer: Timer?
     private var beganAt = CACurrentMediaTime()
     private var offset: CGFloat = 0
@@ -702,6 +718,7 @@ final class MarqueeLabel: NSTextField {
             return
         }
         guard outgoingImage != nil || overflow > 0 else { needsDisplay = true; return }
+        let distance = max(0, attributedStringValue.size().width - bounds.width + 4)
         let timer = Timer(timeInterval: outgoingImage == nil ? 1.0 / 30 : 1.0 / 60, repeats: true) { [weak self] _ in
             guard let self else { return }
             if self.outgoingImage != nil {
@@ -712,15 +729,15 @@ final class MarqueeLabel: NSTextField {
                 self.needsDisplay = true
                 return
             }
-            let distance = max(0, self.attributedStringValue.size().width - self.bounds.width + 4)
             let travel = Double(distance) / 22
             let cycle = 2 + travel + 1.5 + travel
             let phase = (CACurrentMediaTime() - self.beganAt).truncatingRemainder(dividingBy: cycle)
+            let previousOffset = self.offset
             if phase < 2 { self.offset = 0 }
             else if phase < 2 + travel { self.offset = CGFloat((phase - 2) * 22) }
             else if phase < 3.5 + travel { self.offset = distance }
             else { self.offset = max(0, distance - CGFloat((phase - 3.5 - travel) * 22)) }
-            self.needsDisplay = true
+            if self.offset != previousOffset { self.needsDisplay = true }
         }
         timer.tolerance = 0.01
         RunLoop.main.add(timer, forMode: .common)
