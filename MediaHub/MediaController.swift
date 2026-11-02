@@ -27,6 +27,7 @@ final class MediaController {
     private var favoriteRequest = FavoriteRequestState()
     private var seekRequest = SeekRequestState()
     private var seekGeneration = 0
+    private var navigationGeneration = 0
     private var favoriteReadBusy = false
     private var favoriteActivityTimer: Timer?
     private var nextFavoriteVerificationAt: Double = 0
@@ -120,9 +121,11 @@ final class MediaController {
         guard !stopped, !readBusy, Date() >= retryAfter else { return }
         readBusy = true
         let observedSeekGeneration = seekGeneration
+        let observedNavigationGeneration = navigationGeneration
         client.read { [weak self] payload in
             guard let self, !self.stopped else { return }
             self.readBusy = false
+            guard observedNavigationGeneration == self.navigationGeneration else { self.readState(); return }
             // A snapshot requested before the latest seek can arrive after its
             // command reply. Discard it before it can acknowledge the new target.
             guard observedSeekGeneration == self.seekGeneration else { return }
@@ -151,21 +154,22 @@ final class MediaController {
             if payload != nil {
                 let decision = self.autoSkip.observe(next, blacklist: self.blacklist.document,
                     enabled: self.autoSkipEnabled && self.blacklist.readError == nil, now: Date().timeIntervalSince1970)
-                if decision == .skip {
+                if let direction = decision.skipDirection {
                     self.endSeeking()
                     self.trackNotifications.cancelCurrent()
                     self.autoSkipError = nil
                     let expectedRevision = self.revision
-                    self.client.send(4) { [weak self] success in
+                    self.client.send(direction.command) { [weak self] success in
                         guard let self, !self.stopped, self.revision == expectedRevision else { return }
                         if success { self.readState() }
                         else {
+                            self.autoSkip.skipFailed(for: next)
                             self.autoSkipError = L("error.skip_failed")
                             self.logger.error("Automatic skip command failed")
                         }
                     }
                 }
-                if let announcement = self.trackAnnouncements.observe(next, enabled: self.notificationsEnabled && decision != .skip) {
+                if let announcement = self.trackAnnouncements.observe(next, enabled: self.notificationsEnabled && decision.skipDirection == nil) {
                     self.trackNotifications.show(announcement)
                 } else {
                     self.trackNotifications.updateContent(for: next)
@@ -181,8 +185,10 @@ final class MediaController {
         guard state.hasMedia else { return }
         switch action {
         case .togglePlayback: send(2)
-        case .previous: send(state.isPodcast ? 12 : 5)
-        case .next: send(state.isPodcast ? 13 : 4)
+        case .previous:
+            if state.isPodcast { send(12) } else { navigate(.previous) }
+        case .next:
+            if state.isPodcast { send(13) } else { navigate(.next) }
         case .beginSeeking(let forward):
             endSeeking()
             seekingEndCommand = forward ? 9 : 11
@@ -219,6 +225,19 @@ final class MediaController {
     private func send(_ command: Int) {
         client.send(command) { [weak self] success in
             if !success { self?.logger.error("Media command \(command) failed") }
+        }
+    }
+
+    private func navigate(_ direction: AutoSkipState.Direction) {
+        navigationGeneration += 1
+        let request = autoSkip.navigate(direction, from: state, now: Date().timeIntervalSince1970)
+        client.send(direction.command) { [weak self] success in
+            guard let self, !self.stopped else { return }
+            if success { self.readState() }
+            else {
+                self.autoSkip.navigationFailed(request)
+                self.logger.error("Track navigation command failed")
+            }
         }
     }
 

@@ -57,6 +57,8 @@ Open **Manage blacklist** and select an entry to remove it. Turn off **Automatic
 
 Matches are exact apart from capitalization and surrounding spaces. Combined artist credits are treated as one name unless the player provides separate artists.
 
+When you go back using the Touch Bar, blocked tracks are skipped backward too.
+
 Automatic skipping stops after 10 consecutive skips to avoid getting stuck in a blocked queue. Toggle it off and on to reset the limit.
 
 ## Now-playing notifications

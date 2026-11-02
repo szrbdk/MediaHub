@@ -12,6 +12,8 @@ final class TouchBarView: NSObject {
     private var scrubOpen = false
     private var detailsOpen = false
     private let detailsTitle = MarqueeLabel(labelWithString: "")
+    private let detailsArtist = MarqueeLabel(labelWithString: "")
+    private let detailsMediaIcon = NSTextField(labelWithString: "")
     private var detailsControls: NSStackView!
     private var detailsTrailing: NSStackView!
     private var detailsInfo: NSView!
@@ -23,6 +25,8 @@ final class TouchBarView: NSObject {
     private var scrubCloseGeneration = 0
     private var scrubTrackKey = ""
     private let titleLabel = MarqueeLabel(labelWithString: "")
+    private let artistLabel = MarqueeLabel(labelWithString: "")
+    private let mediaIcon = NSTextField(labelWithString: "")
     private let timeLabel = NSTextField(labelWithString: "")
     private let progressView = TrackProgressView()
     private let seekSurface = SeekSurface(frame: .zero)
@@ -120,29 +124,53 @@ final class TouchBarView: NSObject {
         return button
     }
 
+    private func makeTrackInfo(title: MarqueeLabel, artist: MarqueeLabel, icon: NSTextField) -> NSView {
+        for label in [title, artist] {
+            label.translatesAutoresizingMaskIntoConstraints = false
+            label.lineBreakMode = .byTruncatingTail
+            label.maximumNumberOfLines = 1
+            label.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        }
+        let rows = NSStackView(views: [title, artist])
+        rows.orientation = .vertical
+        rows.alignment = .leading
+        rows.spacing = 0
+        rows.detachesHiddenViews = true
+        let container = NSView()
+        container.wantsLayer = true
+        container.layer?.backgroundColor = NSColor(white: 0.06, alpha: 1).cgColor
+        container.layer?.cornerRadius = 7
+        rows.translatesAutoresizingMaskIntoConstraints = false
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        icon.alignment = .center
+        icon.lineBreakMode = .byClipping
+        icon.maximumNumberOfLines = 1
+        icon.setAccessibilityElement(false)
+        container.addSubview(icon)
+        container.addSubview(rows)
+        NSLayoutConstraint.activate([
+            container.heightAnchor.constraint(equalToConstant: 28),
+            rows.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            icon.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 10),
+            icon.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            icon.widthAnchor.constraint(equalToConstant: 18),
+            icon.heightAnchor.constraint(equalToConstant: 20),
+            rows.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 7),
+            rows.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -10),
+            title.widthAnchor.constraint(equalTo: rows.widthAnchor),
+            artist.widthAnchor.constraint(equalTo: rows.widthAnchor),
+            title.heightAnchor.constraint(equalToConstant: 15),
+            artist.heightAnchor.constraint(equalToConstant: 12)
+        ])
+        return container
+    }
+
     private func makeControls() -> NSView {
-        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
-        titleLabel.lineBreakMode = .byTruncatingTail
-        titleLabel.maximumNumberOfLines = 1
-        let text = NSStackView(views: [titleLabel])
-        text.orientation = .horizontal
-        text.alignment = .centerY
-        text.spacing = 0
-        text.distribution = .fill
+        let text = makeTrackInfo(title: titleLabel, artist: artistLabel, icon: mediaIcon)
         songInfoView = text
         songWidth = text.widthAnchor.constraint(equalToConstant: 250)
         songWidth.priority = NSLayoutConstraint.Priority(999)
         songWidth.isActive = true
-        text.heightAnchor.constraint(equalToConstant: 28).isActive = true
-        text.edgeInsets = NSEdgeInsets(top: 0, left: 10, bottom: 0, right: 10)
-        text.wantsLayer = true
-        text.layer?.backgroundColor = NSColor(white: 0.06, alpha: 1).cgColor
-        text.layer?.cornerRadius = 7
-        text.layer?.borderWidth = 0
-        text.layer?.borderColor = NSColor(white: 0.19, alpha: 1).cgColor
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        titleLabel.widthAnchor.constraint(equalTo: text.widthAnchor, constant: -20).isActive = true
-        titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
         backButton = button("backward.end.fill", L("playback.previous"), #selector(previous))
         playButton = button("play.fill", L("playback.toggle"), #selector(toggle))
         nextButton = button("forward.end.fill", L("playback.next"), #selector(next))
@@ -201,18 +229,7 @@ final class TouchBarView: NSObject {
     }
 
     private func makeDetailsBar() {
-        detailsTitle.lineBreakMode = .byTruncatingTail
-        detailsTitle.maximumNumberOfLines = 1
-        detailsTitle.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let info = NSStackView(views: [detailsTitle])
-        info.alignment = .centerY
-        info.edgeInsets = NSEdgeInsets(top: 0, left: 10, bottom: 0, right: 10)
-        info.wantsLayer = true
-        info.layer?.backgroundColor = NSColor(white: 0.06, alpha: 1).cgColor
-        info.layer?.cornerRadius = 7
-        info.heightAnchor.constraint(equalToConstant: 28).isActive = true
-        detailsTitle.translatesAutoresizingMaskIntoConstraints = false
-        detailsTitle.widthAnchor.constraint(equalTo: info.widthAnchor, constant: -20).isActive = true
+        let info = makeTrackInfo(title: detailsTitle, artist: detailsArtist, icon: detailsMediaIcon)
         detailsWidth = info.widthAnchor.constraint(equalToConstant: 280)
         detailsWidth.priority = NSLayoutConstraint.Priority(999)
         detailsWidth.isActive = true
@@ -298,36 +315,45 @@ final class TouchBarView: NSObject {
         blockArtistButton.toolTip = "\(state.primaryArtistBlacklisted ? L("blacklist.remove") : L("blacklist.add")): \(artistName)"
         renderTitle(animateChange: animateTitleChange)
         detailsTitle.setText(titleLabel.attributedStringValue, animateChange: false)
+        detailsArtist.setText(artistLabel.attributedStringValue, animateChange: false)
+        detailsArtist.isHidden = artistLabel.isHidden
         refreshProgress()
         scheduleSongSizing()
     }
 
     private func renderTitle(animateChange: Bool) {
+        for icon in [mediaIcon, detailsMediaIcon] {
+            // Draw the color directly, as the original inline symbol did,
+            // instead of relying on NSImageView template tinting in Touch Bar.
+            icon.attributedStringValue = NSAttributedString(string: state.isPodcast ? "◉" : "♫", attributes: [
+                .font: NSFont.systemFont(ofSize: 14, weight: .medium),
+                .foregroundColor: state.hasMedia && state.playing ? NSColor.systemPink : NSColor(white: 0.5, alpha: 1)])
+        }
         guard state.hasMedia else {
+            artistLabel.cancelTransition()
+            artistLabel.setText(NSAttributedString(string: ""), animateChange: false)
+            artistLabel.isHidden = true
             titleLabel.cancelTransition()
-            titleLabel.attributedStringValue = NSAttributedString(string: "♫  \(L("playback.waiting"))", attributes: [
+            titleLabel.attributedStringValue = NSAttributedString(string: L("playback.waiting"), attributes: [
                 .font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor(white: 0.55, alpha: 1)])
             titleLabel.toolTip = L("playback.waiting")
             return
         }
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineBreakMode = .byTruncatingTail
-        let value = NSMutableAttributedString(string: state.isPodcast ? "◉  " : "♫  ", attributes: [
-            .font: NSFont.systemFont(ofSize: 12, weight: .medium),
-            .foregroundColor: state.playing ? NSColor.systemPink : NSColor(white: 0.5, alpha: 1)])
-        value.append(NSAttributedString(string: state.title, attributes: [
-            .font: NSFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: NSColor.white]))
-        if !state.artist.isEmpty {
-            value.append(NSAttributedString(string: "   ·   ", attributes: [
-                .font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor(white: 0.35, alpha: 1)]))
-            value.append(NSAttributedString(string: state.artist, attributes: [
-                .font: NSFont.systemFont(ofSize: 12), .foregroundColor: NSColor(white: 0.66, alpha: 1)]))
-        }
+        let value = NSMutableAttributedString(string: state.title, attributes: [
+            .font: NSFont.systemFont(ofSize: 11.5, weight: .semibold), .foregroundColor: NSColor.white])
         value.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: value.length))
         titleLabel.setText(value, animateChange: animateChange)
+        artistLabel.isHidden = state.artist.isEmpty
+        artistLabel.setText(NSAttributedString(string: state.artist, attributes: [
+            .font: NSFont.systemFont(ofSize: 9.5), .foregroundColor: NSColor(white: 0.66, alpha: 1),
+            .paragraphStyle: paragraph]), animateChange: animateChange)
         let trackDescription = state.artist.isEmpty ? state.title : "\(state.title) — \(state.artist)"
         titleLabel.toolTip = "\(trackDescription) · \(L("touchbar.open_actions"))"
+        artistLabel.toolTip = titleLabel.toolTip
         detailsTitle.toolTip = "\(trackDescription) · \(L("touchbar.return"))"
+        detailsArtist.toolTip = detailsTitle.toolTip
     }
 
     func refreshProgress() {
@@ -456,7 +482,9 @@ final class TouchBarView: NSObject {
             CATransaction.commit()
         }
         titleLabel.animationsEnabled = presented && !scrubOpen && !detailsOpen
+        artistLabel.animationsEnabled = titleLabel.animationsEnabled
         detailsTitle.animationsEnabled = presented && detailsOpen
+        detailsArtist.animationsEnabled = detailsTitle.animationsEnabled
         resizeContentToAvailableWidth()
         if animateOpening, presented, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             let views: [(NSView, Double)] = detailsOpen
@@ -491,7 +519,9 @@ final class TouchBarView: NSObject {
         presented = visible
         if !visible { closeScrubber(); closeDetails() }
         titleLabel.animationsEnabled = visible && !scrubOpen && !detailsOpen
+        artistLabel.animationsEnabled = titleLabel.animationsEnabled
         detailsTitle.animationsEnabled = visible && detailsOpen
+        detailsArtist.animationsEnabled = detailsTitle.animationsEnabled
         if visible { refreshProgress() }
         scheduleSongSizing()
     }
