@@ -156,12 +156,13 @@ final class TouchBarView: NSObject {
             icon.widthAnchor.constraint(equalToConstant: 18),
             icon.heightAnchor.constraint(equalToConstant: 20),
             rows.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 7),
-            rows.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -10),
             title.widthAnchor.constraint(equalTo: rows.widthAnchor),
             artist.widthAnchor.constraint(equalTo: rows.widthAnchor),
             title.heightAnchor.constraint(equalToConstant: 15),
             artist.heightAnchor.constraint(equalToConstant: 12)
         ])
+        let trailing = rows.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -10)
+        trailing.isActive = true
         return container
     }
 
@@ -325,7 +326,10 @@ final class TouchBarView: NSObject {
         for icon in [mediaIcon, detailsMediaIcon] {
             // Draw the color directly, as the original inline symbol did,
             // instead of relying on NSImageView template tinting in Touch Bar.
-            icon.attributedStringValue = NSAttributedString(string: state.isPodcast ? "◉" : "♫", attributes: [
+            let showsFavorite = icon === mediaIcon && state.hasMedia && state.isMusic && state.favorite
+            let symbol = showsFavorite ? "★" : (state.isPodcast ? "◉" : "♫")
+            icon.toolTip = showsFavorite ? L("favorite.active") : nil
+            icon.attributedStringValue = NSAttributedString(string: symbol, attributes: [
                 .font: NSFont.systemFont(ofSize: 14, weight: .medium),
                 .foregroundColor: state.hasMedia && state.playing ? NSColor.systemPink : NSColor(white: 0.5, alpha: 1)])
         }
