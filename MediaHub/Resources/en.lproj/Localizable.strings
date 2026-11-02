@@ -46,3 +46,10 @@
 "error.blacklist_save" = "Could not save the blacklist.";
 "language.english" = "English";
 "language.turkish" = "Turkish";
+"menu.notification_position" = "Notification position";
+"notification.position.topLeft" = "Top left";
+"notification.position.topCenter" = "Top center";
+"notification.position.topRight" = "Top right";
+"notification.position.bottomLeft" = "Bottom left";
+"notification.position.bottomCenter" = "Bottom center";
+"notification.position.bottomRight" = "Bottom right";

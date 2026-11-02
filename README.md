@@ -63,7 +63,9 @@ Automatic skipping stops after 10 consecutive skips to avoid getting stuck in a 
 
 ## Now-playing notifications
 
-A quiet card slides down near the camera, stays visible for a few seconds, and disappears without taking focus. A small play/pause badge shows the playback state. The panel is designed to appear over full-screen apps too.
+Choose **Notification position** in the menu bar to place notifications at the top or bottom, aligned left, center, or right. The default is top center, and your choice is saved.
+
+A quiet card slides in from the selected edge, stays visible for a few seconds, and disappears without taking focus. A small play/pause badge shows the playback state. The panel is designed to appear over full-screen apps too.
 
 Turn **Notifications** off in the menu bar to hide it. MediaHub does not change Music's own notification settings; you can disable those separately in System Settings if you see both.
 

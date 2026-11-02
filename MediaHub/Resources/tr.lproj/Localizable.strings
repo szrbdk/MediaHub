@@ -46,3 +46,10 @@
 "error.blacklist_save" = "Karaliste kaydedilemedi.";
 "language.english" = "İngilizce";
 "language.turkish" = "Türkçe";
+"menu.notification_position" = "Bildirim konumu";
+"notification.position.topLeft" = "Üst sol";
+"notification.position.topCenter" = "Üst orta";
+"notification.position.topRight" = "Üst sağ";
+"notification.position.bottomLeft" = "Alt sol";
+"notification.position.bottomCenter" = "Alt orta";
+"notification.position.bottomRight" = "Alt sağ";

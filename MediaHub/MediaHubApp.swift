@@ -57,14 +57,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         touchBar.target = self
         touchBar.state = controller.touchBarEnabled ? .on : .off
         menu.addItem(touchBar)
+        menu.addItem(.separator())
         menu.addItem(notifications)
         let autoSkip = NSMenuItem(title: L("menu.auto_skip"), action: #selector(toggleAutoSkip(_:)), keyEquivalent: "")
         autoSkip.target = self
         autoSkip.state = controller.autoSkipEnabled ? .on : .off
         autoSkip.toolTip = L("menu.auto_skip_hint")
         autoSkipItem = autoSkip
-        menu.addItem(autoSkip)
+        let positionMenu = NSMenu(title: L("menu.notification_position"))
+        positionMenu.autoenablesItems = false
+        let positionItem = NSMenuItem(title: L("menu.notification_position"), action: nil, keyEquivalent: "")
+        positionItem.submenu = positionMenu
+        localizedMenuItems.append((positionItem, "menu.notification_position"))
+        for position in NotificationPosition.allCases {
+            let choice = NSMenuItem(title: L(position.localizationKey), action: #selector(changeNotificationPosition(_:)), keyEquivalent: "")
+            choice.target = self
+            choice.representedObject = position.rawValue
+            choice.state = controller.notificationPosition == position ? .on : .off
+            localizedMenuItems.append((choice, position.localizationKey))
+            positionMenu.addItem(choice)
+        }
+        menu.addItem(positionItem)
         menu.addItem(.separator())
+        menu.addItem(autoSkip)
         let addBlacklist = NSMenuItem(title: L("blacklist.add"), action: nil, keyEquivalent: "")
         addBlacklist.submenu = addBlacklistMenu
         menu.addItem(addBlacklist)
@@ -116,6 +131,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                    let value = item.representedObject as? String {
                     item.state = value == Localization.shared.language.rawValue ? .on : .off
                 }
+                if item.action == #selector(changeNotificationPosition(_:)),
+                   let value = item.representedObject as? String {
+                    item.state = value == controller.notificationPosition.rawValue ? .on : .off
+                }
                 if let submenu = item.submenu {
                     submenu.title = item.title
                     refresh(submenu)
@@ -131,6 +150,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let value = sender.representedObject as? String, let language = AppLanguage(rawValue: value) else { return }
         Localization.shared.language = language
         controller.refreshLanguage()
+        refreshMenuLanguage()
+    }
+
+    @objc private func changeNotificationPosition(_ sender: NSMenuItem) {
+        guard let value = sender.representedObject as? String,
+              let position = NotificationPosition(rawValue: value) else { return }
+        controller.setNotificationPosition(position)
         refreshMenuLanguage()
     }
 

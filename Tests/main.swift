@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 // Keep the shared localization's default preference in memory during model tests.
 UserDefaults.standard.setVolatileDomain(["appLanguage": "en"], forName: UserDefaults.argumentDomain)
@@ -337,6 +338,26 @@ expect(Set(englishStrings.keys) == Set(turkishStrings.keys), "Both languages mus
 expect(englishStrings.keys.allSatisfy { $0.contains(".") && !$0.contains(" ") }, "Translations must use stable identifiers rather than display text")
 expect(!turkishStrings.values.contains(where: { $0.isEmpty }), "Translations must not be empty")
 let preferences = FeaturePreferences(store: preferenceStore)
+expect(preferences.notificationPosition == .topCenter, "Notification position must default to top center")
+let notificationScreen = CGRect(x: -1440, y: -100, width: 1440, height: 900)
+for position in NotificationPosition.allCases {
+    preferences.notificationPosition = position
+    expect(FeaturePreferences(store: preferenceStore).notificationPosition == position, "Every notification position must persist")
+    let frame = position.frame(in: notificationScreen, safeTop: 32)
+    expect(notificationScreen.contains(frame), "Notification frames must stay inside the selected screen")
+    expect(position.isTop ? frame.maxY == notificationScreen.maxY : frame.minY == notificationScreen.minY + 16,
+           "Notifications must align with their selected vertical edge")
+    let hidden = position.hiddenFrame(for: frame)
+    expect(position.isTop ? hidden.minY > notificationScreen.maxY : hidden.maxY < notificationScreen.minY,
+           "Notification animations must exit through the selected edge")
+    switch position {
+    case .topLeft, .bottomLeft: expect(frame.minX == notificationScreen.minX + 16, "Left positions must align left")
+    case .topCenter, .bottomCenter: expect(frame.midX == notificationScreen.midX, "Center positions must align centrally")
+    case .topRight, .bottomRight: expect(frame.maxX == notificationScreen.maxX - 16, "Right positions must align right")
+    }
+}
+preferenceStore.values["notificationPosition"] = "invalid"
+expect(preferences.notificationPosition == .topCenter, "Invalid positions must fall back to top center")
 expect(preferences.isEnabled(.notifications), "Notifications should default to enabled")
 expect(preferences.isEnabled(.touchBar), "Touch Bar should default to enabled")
 preferences.setEnabled(false, for: .notifications)

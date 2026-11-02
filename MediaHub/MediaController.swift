@@ -11,6 +11,7 @@ final class MediaController {
     private var blacklistOperationError: String?
     private var autoSkipError: String?
     var notificationsEnabled: Bool { preferences.isEnabled(.notifications) }
+    var notificationPosition: NotificationPosition { preferences.notificationPosition }
     var touchBarEnabled: Bool { preferences.isEnabled(.touchBar) }
     var autoSkipEnabled: Bool { preferences.isEnabled(.autoSkip) }
     var currentMediaState: MediaState { state }
@@ -49,6 +50,7 @@ final class MediaController {
         presenter.setEnabled(touchBarEnabled)
         presenter.start()
         trackNotifications.setEnabled(notificationsEnabled)
+        trackNotifications.setPosition(notificationPosition)
         trackNotifications.start()
         pollTimer = timer(interval: 0.5) { [weak self] in self?.readState() }
         favoriteTimer = timer(interval: 5) { [weak self] in self?.readFavorite() }
@@ -58,6 +60,11 @@ final class MediaController {
     func setNotificationsEnabled(_ enabled: Bool) {
         preferences.setEnabled(enabled, for: .notifications)
         trackNotifications.setEnabled(enabled)
+    }
+
+    func setNotificationPosition(_ position: NotificationPosition) {
+        preferences.notificationPosition = position
+        trackNotifications.setPosition(position)
     }
 
     func setTouchBarEnabled(_ enabled: Bool) {

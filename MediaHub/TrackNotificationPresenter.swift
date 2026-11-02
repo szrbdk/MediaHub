@@ -15,6 +15,13 @@ final class TrackNotificationPresenter {
     private var screenObserver: NSObjectProtocol?
     private var currentAnnouncement: TrackAnnouncement?
     private var enabled = true
+    private var position: NotificationPosition = .topCenter
+
+    func setPosition(_ position: NotificationPosition) {
+        guard self.position != position else { return }
+        dismiss(animated: false)
+        self.position = position
+    }
 
     func setEnabled(_ enabled: Bool) {
         self.enabled = enabled
@@ -80,12 +87,8 @@ final class TrackNotificationPresenter {
     private func present(_ announcement: TrackAnnouncement) {
         guard enabled, !suspended else { return }
         guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
-        let width = min(400, screen.frame.width - 32)
-        // Keep the floating card below a physical notch, with no connecting stem.
-        let height = 112 + screen.safeAreaInsets.top
-        let visibleFrame = NSRect(x: screen.frame.midX - width / 2,
-                                  y: screen.frame.maxY - height, width: width, height: height)
-        let hiddenFrame = visibleFrame.offsetBy(dx: 0, dy: height + 2)
+        let visibleFrame = position.frame(in: screen.frame, safeTop: screen.safeAreaInsets.top)
+        let hiddenFrame = position.hiddenFrame(for: visibleFrame)
         let window: TrackNotificationPanel
         if let panel { window = panel }
         else {
@@ -139,7 +142,7 @@ final class TrackNotificationPresenter {
             panel.orderOut(nil)
             return
         }
-        let hiddenFrame = panel.frame.offsetBy(dx: 0, dy: panel.frame.height + 2)
+        let hiddenFrame = position.hiddenFrame(for: panel.frame)
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.22
             context.timingFunction = CAMediaTimingFunction(name: .easeIn)
