@@ -53,3 +53,9 @@
 "notification.position.bottomLeft" = "Alt sol";
 "notification.position.bottomCenter" = "Alt orta";
 "notification.position.bottomRight" = "Alt sağ";
+"menu.screen_display" = "Ekran görünümü";
+"display.mode.notifications" = "Bildirimler";
+"display.mode.miniPlayer" = "Mini oynatıcı";
+"display.mode.off" = "Kapalı";
+"mini.expand" = "Oynatıcıyı büyüt";
+"mini.collapse" = "Oynatıcıyı küçült";

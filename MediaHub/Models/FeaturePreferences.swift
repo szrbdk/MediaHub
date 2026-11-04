@@ -1,6 +1,11 @@
 import Foundation
 import CoreGraphics
 
+enum ScreenDisplayMode: String, CaseIterable {
+    case notifications, miniPlayer, off
+    var localizationKey: String { "display.mode.\(rawValue)" }
+}
+
 enum NotificationPosition: String, CaseIterable {
     case topLeft, topCenter, topRight, bottomLeft, bottomCenter, bottomRight
 
@@ -42,6 +47,15 @@ final class FeaturePreferences {
     private let store: PreferenceStore
 
     init(store: PreferenceStore = UserDefaults.standard) { self.store = store }
+
+    var screenDisplayMode: ScreenDisplayMode {
+        get {
+            if let raw = store.object(forKey: "screenDisplayMode") as? String,
+               let mode = ScreenDisplayMode(rawValue: raw) { return mode }
+            return isEnabled(.notifications) ? .notifications : .off
+        }
+        set { store.set(newValue.rawValue, forKey: "screenDisplayMode") }
+    }
 
     var notificationPosition: NotificationPosition {
         get {

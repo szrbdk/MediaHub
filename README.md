@@ -6,17 +6,17 @@
 
 <p align="center">Your music, controls, and now-playing updates within reach.</p>
 
-MediaHub is a native macOS menu bar app that brings playback controls to your Touch Bar, shows track updates near the camera, and automatically skips songs or artists you choose to block.
+MediaHub is a native macOS menu bar app with Touch Bar controls, a compact on-screen player, now-playing notifications, and automatic skipping for songs or artists you choose to block.
 
 It stays out of your way: no main window, no Dock icon, and no need to switch away from what you are doing.
 
 ## What you can do
 
 - **Control playback from the Touch Bar.** Play, pause, change tracks, and seek without opening your player. Podcasts get 15-second skip controls.
-- **See what is playing.** A temporary card appears at the top of your screen when a track changes or playback is paused or resumed, with artwork, song, artist, and album information when available.
+- **See what is playing.** Choose a temporary notification or an interactive mini player with artwork, track information, and playback controls.
 - **Keep unwanted music out of your queue.** Block a song or artist and let automatic skipping handle future matches.
-- **Manage Music favorites.** Add or remove the current song from favorites directly from the Touch Bar.
-- **Choose your setup.** Enable Touch Bar controls, notifications, and automatic skipping independently. Use the app in English or Turkish.
+- **Manage Music favorites.** Add or remove the current song from favorites from the Touch Bar or mini player.
+- **Choose your setup.** Use Touch Bar controls, choose your on-screen display, and enable automatic skipping. Use the app in English or Turkish.
 
 ## Install
 
@@ -67,7 +67,15 @@ Choose **Notification position** in the menu bar to place notifications at the t
 
 A quiet card slides in from the selected edge, stays visible for a few seconds, and disappears without taking focus. A small play/pause badge shows the playback state. The panel is designed to appear over full-screen apps too.
 
-Turn **Notifications** off in the menu bar to hide it. MediaHub does not change Music's own notification settings; you can disable those separately in System Settings if you see both.
+Choose **On-screen display → Notifications**, **Mini player**, or **Off** in the menu bar. Your selection is saved; notifications and the mini player never appear together. Touch Bar controls work independently. MediaHub does not change Music's own notification settings; you can disable those separately in System Settings if you see both.
+
+## Mini player
+
+The mini player sits in the bottom-right corner of your primary screen, including over full-screen apps. It shows artwork, the track and artist, playback controls, a Music favorite button, and a seek bar. Drag the seek bar to preview a position and release to apply it.
+
+The expanded player stays visible until you collapse it. Hover over the artwork to reveal the collapse button. The compact square hides after the pointer has been away for three seconds. Move the pointer to the bottom-right corner briefly to bring it back, then click to expand. With no media playing, you can still reveal the player to see its waiting state.
+
+While collapsed, a new track briefly opens a card with just artwork, title, and artist before returning to the compact or hidden state. The card uses the same size as the expanded player. Transitions grow from the bottom-right corner and shrink back into it.
 
 ## Language
 

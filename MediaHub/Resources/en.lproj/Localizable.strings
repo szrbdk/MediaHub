@@ -53,3 +53,9 @@
 "notification.position.bottomLeft" = "Bottom left";
 "notification.position.bottomCenter" = "Bottom center";
 "notification.position.bottomRight" = "Bottom right";
+"menu.screen_display" = "On-screen display";
+"display.mode.notifications" = "Notifications";
+"display.mode.miniPlayer" = "Mini player";
+"display.mode.off" = "Off";
+"mini.expand" = "Expand player";
+"mini.collapse" = "Collapse player";

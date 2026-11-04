@@ -50,9 +50,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         heading.isEnabled = false
         menu.addItem(heading)
         menu.addItem(.separator())
-        let notifications = NSMenuItem(title: L("menu.notifications"), action: #selector(toggleNotifications(_:)), keyEquivalent: "")
-        notifications.target = self
-        notifications.state = controller.notificationsEnabled ? .on : .off
+        let notifications = NSMenuItem(title: L("menu.screen_display"), action: nil, keyEquivalent: "")
+        let displayMenu = NSMenu(title: notifications.title)
+        displayMenu.autoenablesItems = false
+        notifications.submenu = displayMenu
+        for mode in ScreenDisplayMode.allCases {
+            let choice = NSMenuItem(title: L(mode.localizationKey), action: #selector(changeScreenDisplayMode(_:)), keyEquivalent: "")
+            choice.target = self
+            choice.representedObject = mode.rawValue
+            choice.state = controller.screenDisplayMode == mode ? .on : .off
+            localizedMenuItems.append((choice, mode.localizationKey))
+            displayMenu.addItem(choice)
+        }
         let touchBar = NSMenuItem(title: L("menu.touch_bar"), action: #selector(toggleTouchBar(_:)), keyEquivalent: "")
         touchBar.target = self
         touchBar.state = controller.touchBarEnabled ? .on : .off
@@ -110,7 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let quit = NSMenuItem(title: L("menu.quit"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApp
         menu.addItem(quit)
-        localizedMenuItems += [(notifications, "menu.notifications"), (touchBar, "menu.touch_bar"), (autoSkip, "menu.auto_skip"),
+        localizedMenuItems += [(notifications, "menu.screen_display"), (touchBar, "menu.touch_bar"), (autoSkip, "menu.auto_skip"),
                             (addBlacklist, "blacklist.add"), (manageBlacklist, "menu.manage_blacklist"),
                             (languageItem, "menu.language"), (quit, "menu.quit")]
         statusItem?.menu = menu
@@ -134,6 +143,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 if item.action == #selector(changeNotificationPosition(_:)),
                    let value = item.representedObject as? String {
                     item.state = value == controller.notificationPosition.rawValue ? .on : .off
+                }
+                if item.action == #selector(changeScreenDisplayMode(_:)),
+                   let value = item.representedObject as? String {
+                    item.state = value == controller.screenDisplayMode.rawValue ? .on : .off
+                }
+                if item.submenu?.items.contains(where: { $0.action == #selector(changeNotificationPosition(_:)) }) == true {
+                    item.isEnabled = controller.notificationsEnabled
                 }
                 if let submenu = item.submenu {
                     submenu.title = item.title
@@ -251,9 +267,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         refreshBlacklistMenus()
     }
 
-    @objc private func toggleNotifications(_ sender: NSMenuItem) {
-        controller.setNotificationsEnabled(!controller.notificationsEnabled)
-        sender.state = controller.notificationsEnabled ? .on : .off
+    @objc private func changeScreenDisplayMode(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let mode = ScreenDisplayMode(rawValue: raw) else { return }
+        controller.setScreenDisplayMode(mode)
+        refreshMenuLanguage()
     }
 
     @objc private func toggleTouchBar(_ sender: NSMenuItem) {

@@ -599,4 +599,133 @@ expect(touchBarRules.contains(touchBarArtist), "The first Touch Bar blacklist ac
 touchBarRules.remove(touchBarArtist)
 expect(!touchBarRules.contains(touchBarArtist), "The second Touch Bar blacklist action should remove the same rule")
 
+var miniVisibility = MiniPlayerState()
+let screenModeStore = TestPreferenceStore()
+let screenModePreferences = FeaturePreferences(store: screenModeStore)
+expect(screenModePreferences.screenDisplayMode == .notifications, "New installations must retain notifications by default")
+screenModePreferences.setEnabled(false, for: .notifications)
+expect(screenModePreferences.screenDisplayMode == .off, "Existing disabled notifications must remain off after migration")
+for mode in ScreenDisplayMode.allCases {
+    screenModePreferences.screenDisplayMode = mode
+    expect(FeaturePreferences(store: screenModeStore).screenDisplayMode == mode, "A single persisted mode must select exactly one screen surface")
+}
+screenModePreferences.screenDisplayMode = .miniPlayer
+screenModePreferences.setEnabled(true, for: .notifications)
+expect(screenModePreferences.screenDisplayMode == .miniPlayer, "Legacy notification toggles must not override an explicit screen mode")
+screenModeStore.values["screenDisplayMode"] = "invalid"
+expect(screenModePreferences.screenDisplayMode == .notifications, "Invalid screen modes must fall back to the existing notification preference")
+miniVisibility.update(at: 1000, pointerInside: false, pointerInCorner: false)
+expect(miniVisibility.form == .expanded, "Expanded player must never auto-hide")
+miniVisibility.collapse(at: 1000)
+miniVisibility.update(at: 1002.9, pointerInside: false, pointerInCorner: false)
+expect(miniVisibility.form == .compact, "Compact player must remain visible for three seconds")
+miniVisibility.update(at: 1003, pointerInside: false, pointerInCorner: false)
+expect(miniVisibility.form == .hidden, "Compact player must hide after three seconds")
+miniVisibility.update(at: 1004, pointerInside: false, pointerInCorner: true)
+miniVisibility.update(at: 1004.1, pointerInside: false, pointerInCorner: false)
+miniVisibility.update(at: 1005, pointerInside: false, pointerInCorner: true)
+miniVisibility.update(at: 1005.1, pointerInside: false, pointerInCorner: true)
+expect(miniVisibility.form == .hidden, "Brief corner visits must not accumulate toward reveal")
+miniVisibility.update(at: 1005.25, pointerInside: false, pointerInCorner: true)
+expect(miniVisibility.form == .compact, "A continuous corner dwell must reveal only the compact form")
+miniVisibility.update(at: 1010, pointerInside: true, pointerInCorner: false)
+expect(miniVisibility.form == .compact, "Hover must keep the compact player visible")
+miniVisibility.update(at: 1011, pointerInside: false, pointerInCorner: false)
+miniVisibility.update(at: 1013.9, pointerInside: false, pointerInCorner: false)
+expect(miniVisibility.form == .compact, "Hide delay must restart when the pointer leaves")
+miniVisibility.expand()
+miniVisibility.update(at: 1020, pointerInside: false, pointerInCorner: false)
+expect(miniVisibility.form == .expanded, "Expanding must discard the previous hide deadline")
+miniVisibility.collapse(at: 1021)
+miniVisibility.update(at: 1022, pointerInside: true, pointerInCorner: false)
+miniVisibility.update(at: 1050, pointerInside: true, pointerInCorner: false)
+expect(miniVisibility.form == .compact, "A compact player must not disappear under the pointer")
+
+var miniAnnouncements = MiniPlayerState()
+miniAnnouncements.observeTrack(track("Initial"), enabled: true, now: 0)
+miniAnnouncements.collapse(at: 1)
+miniAnnouncements.observeTrack(track("Initial"), enabled: true, now: 2)
+expect(miniAnnouncements.form == .compact, "Collapsing must not announce the current song")
+miniAnnouncements.observeTrack(track("New song"), enabled: true, now: 3)
+expect(miniAnnouncements.form == .announcement, "A changed song must open a compact-mode announcement")
+miniAnnouncements.update(at: 5.9, pointerInside: false, pointerInCorner: false)
+expect(miniAnnouncements.form == .announcement, "A track card must remain visible for three seconds")
+miniAnnouncements.update(at: 6, pointerInside: false, pointerInCorner: false)
+expect(miniAnnouncements.form == .compact, "Announcements must restore the previous compact form")
+miniAnnouncements.update(at: 10, pointerInside: false, pointerInCorner: false)
+expect(miniAnnouncements.form == .hidden, "Compact mode must still auto-hide after an announcement")
+miniAnnouncements.observeTrack(track("Hidden song"), enabled: true, now: 11)
+expect(miniAnnouncements.form == .announcement, "Hidden compact mode must still announce new songs")
+miniAnnouncements.observeTrack(track("Newest song"), enabled: true, now: 12)
+miniAnnouncements.update(at: 14.5, pointerInside: false, pointerInCorner: false)
+expect(miniAnnouncements.form == .announcement, "A newer song must replace the announcement and restart its deadline")
+miniAnnouncements.update(at: 15, pointerInside: false, pointerInCorner: false)
+expect(miniAnnouncements.form == .hidden, "Announcements must restore an originally hidden player")
+miniAnnouncements.observeTrack(track("Newest song", playing: false), enabled: true, now: 16)
+miniAnnouncements.observeTrack(track("Newest song"), enabled: true, now: 17)
+expect(miniAnnouncements.form == .hidden, "Pause and resume must not open a mini-player track announcement")
+miniAnnouncements.observeTrack(track("Paused selection", playing: false), enabled: true, now: 18)
+expect(miniAnnouncements.form == .hidden, "A paused selection must wait until playback starts")
+miniAnnouncements.observeTrack(track("Paused selection"), enabled: true, now: 19)
+expect(miniAnnouncements.form == .announcement, "A new paused selection must announce when playback starts")
+miniAnnouncements.expand()
+miniAnnouncements.update(at: 30, pointerInside: false, pointerInCorner: false)
+expect(miniAnnouncements.form == .expanded, "Expanding must cancel any announcement dismissal")
+miniAnnouncements.observeTrack(track("Expanded song"), enabled: true, now: 31)
+expect(miniAnnouncements.form == .expanded, "New songs must not replace expanded controls with a notification")
+miniAnnouncements.collapse(at: 32)
+miniAnnouncements.observeTrack(track("Blocked song"), enabled: false, now: 33)
+expect(miniAnnouncements.form == .compact, "Auto-skipped songs must not open an announcement")
+miniAnnouncements.observeTrack(track("Blocked song"), enabled: true, now: 34)
+expect(miniAnnouncements.form == .compact, "Suppressed songs must not announce retroactively")
+miniAnnouncements.observeTrack(MediaState(), enabled: true, now: 35)
+miniAnnouncements.observeTrack(track("Blocked song"), enabled: true, now: 36)
+expect(miniAnnouncements.form == .compact, "A metadata outage must not replay an announcement")
+let miniScreen = CGRect(x: -1440, y: -900, width: 1440, height: 900)
+let expandedMiniFrame = MiniPlayerState.frame(for: .expanded, in: miniScreen)
+expect(expandedMiniFrame.size == MiniPlayerState.frame(for: .announcement, in: miniScreen).size,
+       "Track cards must use exactly the expanded player's dimensions")
+let compactMiniFrame = MiniPlayerState.frame(for: .compact, in: miniScreen)
+expect(compactMiniFrame.width == compactMiniFrame.height, "The compact player must be square")
+for form in [MiniPlayerState.Form.expanded, .compact, .hidden, .announcement] {
+    let frame = MiniPlayerState.frame(for: form, in: miniScreen)
+    expect(frame.maxX == miniScreen.maxX && frame.minY == miniScreen.minY,
+           "All forms must share the bottom-right anchor")
+}
+let collapsedMiniFrame = MiniPlayerState.collapsedFrame(in: miniScreen)
+expect(collapsedMiniFrame.maxX == miniScreen.maxX && collapsedMiniFrame.minY == miniScreen.minY,
+       "Hidden transitions must shrink into the same bottom-right anchor")
+
+// A transition must remain monotonic, including interrupted/reversed changes.
+let miniTransitionCases: [(MiniPlayerState.Form, MiniPlayerState.Form)] = [(.expanded, .compact), (.compact, .hidden),
+    (.hidden, .compact), (.compact, .expanded), (.hidden, .announcement), (.announcement, .hidden)]
+for (from, to) in miniTransitionCases {
+    var motion = MiniPlayerTransition()
+    motion.move(to: from, at: 0, animated: false)
+    motion.move(to: to, at: 1, animated: true)
+    let start = motion.pose(at: 1)
+    let end = MiniPlayerTransition.Pose.target(to)
+    var previous = start
+    for step in 1...30 {
+        let current = motion.pose(at: 1 + Double(step) / 30 * 0.26)
+        expect(end.size.width >= start.size.width ? current.size.width >= previous.size.width : current.size.width <= previous.size.width,
+               "Surface width must never reverse direction during a transition")
+        expect(end.size.height >= start.size.height ? current.size.height >= previous.size.height : current.size.height <= previous.size.height,
+               "Surface height must never reverse direction during a transition")
+        expect(current.size.width >= min(start.size.width, end.size.width) && current.size.width <= max(start.size.width, end.size.width),
+               "Surface size must never overshoot its endpoints")
+        previous = current
+    }
+    expect(motion.isFinished(at: 1.3), "Every surface transition must finish in bounded time")
+}
+var reversedMotion = MiniPlayerTransition()
+reversedMotion.move(to: .expanded, at: 0, animated: false)
+reversedMotion.move(to: .compact, at: 1, animated: true)
+let beforeReversal = reversedMotion.pose(at: 1.1)
+reversedMotion.move(to: .expanded, at: 1.1, animated: true)
+expect(reversedMotion.pose(at: 1.1).size == beforeReversal.size, "Retargeting must preserve the exact current size without a jump")
+expect(reversedMotion.pose(at: 1.15).size.width > beforeReversal.size.width, "A reversed transition must immediately move toward its new target")
+reversedMotion.move(to: .hidden, at: 2, animated: false)
+expect(reversedMotion.pose(at: 2).size == .zero && reversedMotion.isFinished(at: 2), "Reduced-motion and immediate dismissals must apply synchronously")
+
 print("Passed \(assertions) model assertions; no app or media service was launched.")

@@ -10,7 +10,8 @@ final class MediaController {
     private var autoSkip = AutoSkipState()
     private var blacklistOperationError: String?
     private var autoSkipError: String?
-    var notificationsEnabled: Bool { preferences.isEnabled(.notifications) }
+    var screenDisplayMode: ScreenDisplayMode { preferences.screenDisplayMode }
+    var notificationsEnabled: Bool { screenDisplayMode == .notifications }
     var notificationPosition: NotificationPosition { preferences.notificationPosition }
     var touchBarEnabled: Bool { preferences.isEnabled(.touchBar) }
     var autoSkipEnabled: Bool { preferences.isEnabled(.autoSkip) }
@@ -22,6 +23,7 @@ final class MediaController {
             ?? (autoSkip.limitReached ? L("error.skip_limit") : nil)
     }
     private let trackNotifications = TrackNotificationPresenter()
+    private let miniPlayer = MiniPlayerPresenter()
     private var trackAnnouncements = TrackAnnouncementState()
     private lazy var presenter = TouchBarPresenter(view: view)
     private var state = MediaState()
@@ -46,6 +48,9 @@ final class MediaController {
     func start() {
         stopped = false
         view.onAction = { [weak self] in self?.handle($0) }
+        miniPlayer.onAction = { [weak self] in self?.handle($0) }
+        miniPlayer.start()
+        miniPlayer.setEnabled(screenDisplayMode == .miniPlayer)
         presenter.onContextChange = { [weak self] in self?.endSeeking() }
         presenter.setEnabled(touchBarEnabled)
         presenter.start()
@@ -57,9 +62,15 @@ final class MediaController {
         readState()
     }
 
-    func setNotificationsEnabled(_ enabled: Bool) {
-        preferences.setEnabled(enabled, for: .notifications)
-        trackNotifications.setEnabled(enabled)
+    func setScreenDisplayMode(_ mode: ScreenDisplayMode) {
+        preferences.screenDisplayMode = mode
+        // Disable the old surface before enabling its replacement.
+        trackNotifications.setEnabled(false)
+        miniPlayer.setEnabled(false)
+        trackNotifications.setEnabled(mode == .notifications)
+        miniPlayer.render(state)
+        miniPlayer.setEnabled(mode == .miniPlayer)
+        if mode == .miniPlayer { readFavorite() }
     }
 
     func setNotificationPosition(_ position: NotificationPosition) {
@@ -115,6 +126,7 @@ final class MediaController {
         state.songBlacklisted = state.songBlacklistEntry.map { blacklist.document.contains($0) } ?? false
         state.primaryArtistBlacklisted = state.primaryArtistBlacklistEntry.map { blacklist.document.contains($0) } ?? false
         view.render(state)
+        miniPlayer.render(state)
     }
 
     private func timer(interval: Double, action: @escaping () -> Void) -> Timer {
@@ -161,6 +173,7 @@ final class MediaController {
             if payload != nil {
                 let decision = self.autoSkip.observe(next, blacklist: self.blacklist.document,
                     enabled: self.autoSkipEnabled && self.blacklist.readError == nil, now: Date().timeIntervalSince1970)
+                self.miniPlayer.observeTrack(next, allowed: decision.skipDirection == nil)
                 if let direction = decision.skipDirection {
                     self.endSeeking()
                     self.trackNotifications.cancelCurrent()
@@ -260,7 +273,7 @@ final class MediaController {
     }
 
     private func readFavorite() {
-        guard !stopped, (touchBarEnabled || favoriteRequest.isPending), state.hasMedia, state.isMusic,
+        guard !stopped, (touchBarEnabled || screenDisplayMode == .miniPlayer || favoriteRequest.isPending), state.hasMedia, state.isMusic,
               !favoriteReadBusy, favoriteRequest.write == nil || favoriteRequest.isConfirming else { return }
         favoriteReadBusy = true
         let expectedRevision = revision
@@ -322,6 +335,7 @@ final class MediaController {
         favoriteRequest = FavoriteRequestState()
         presenter.stop()
         trackNotifications.stop()
+        miniPlayer.stop()
         view.stop()
         endSeeking { [self] in client.stop(completion: completion) }
     }
