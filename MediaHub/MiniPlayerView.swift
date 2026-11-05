@@ -16,16 +16,18 @@ final class MiniPlayerView: NSView {
     var onCollapse: (() -> Void)?
     private var state = MediaState()
     private var form: MiniPlayerState.Form = .expanded
+    private var presented = false
     private var pose = MiniPlayerTransition.Pose.target(.hidden)
     private let surface = CAShapeLayer()
     private let surfaceMask = CAShapeLayer()
     private var artwork: Data?
     private var seekTrackKey: String?
+    private var seekTrailingInset: CGFloat = 0
     private let coverArea = MiniPlayerCover()
     private var cover: NSImageView { coverArea.imageView }
-    private let title = NSTextField(labelWithString: "")
-    private let artist = NSTextField(labelWithString: "")
-    private let time = NSTextField(labelWithString: "")
+    private let title = MarqueeLabel(labelWithString: "")
+    private let artist = MarqueeLabel(labelWithString: "")
+    private let time = MiniPlayerTimeLabel(labelWithString: "")
     private let details = NSView()
     private let seek = MiniPlayerSlider(value: 0, minValue: 0, maxValue: 1, target: nil, action: nil)
     private var previous: NSButton!
@@ -67,7 +69,13 @@ final class MiniPlayerView: NSView {
         favorite = button("star", action: #selector(toggleFavorite), parent: details)
         expand = button("waveform", action: #selector(expandPlayer), parent: self)
         expand.contentTintColor = .systemPink
-        seek.cell = MiniPlayerSliderCell()
+        let seekCell = MiniPlayerSliderCell()
+        seekCell.onTrackGeometry = { [weak self] inset in
+            guard let self, abs(self.seekTrailingInset - inset) > 0.1 else { return }
+            self.seekTrailingInset = inset
+            self.needsLayout = true
+        }
+        seek.cell = seekCell
         seek.minValue = 0
         seek.maxValue = 1
         seek.isContinuous = true
@@ -109,6 +117,7 @@ final class MiniPlayerView: NSView {
     func present(_ pose: MiniPlayerTransition.Pose) {
         guard self.pose.size != pose.size || self.pose.wide != pose.wide || self.pose.opacity != pose.opacity else { return }
         self.pose = pose
+        updateTextAnimations()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         alphaValue = pose.opacity
@@ -123,6 +132,17 @@ final class MiniPlayerView: NSView {
         layoutSubtreeIfNeeded()
     }
 
+    func setPresented(_ presented: Bool) {
+        self.presented = presented
+        updateTextAnimations()
+    }
+
+    private func updateTextAnimations() {
+        let enabled = presented && pose.wide >= 0.999 && pose.opacity >= 0.999
+        title.animationsEnabled = enabled
+        artist.animationsEnabled = enabled
+    }
+
     func containsSurface(_ point: NSPoint) -> Bool {
         pose.opacity > 0.01 && surfacePath().contains(point)
     }
@@ -130,10 +150,16 @@ final class MiniPlayerView: NSView {
     func cancelSeek() { seekTrackKey = nil }
 
     func render(_ state: MediaState) {
+        let animateChange = self.state.hasMedia && state.hasMedia && self.state.trackKey != state.trackKey
+        let favoriteChanged = self.state.favorite != state.favorite
         if self.state.trackKey != state.trackKey || !state.timeline.isValid { cancelSeek() }
         self.state = state
-        title.stringValue = state.hasMedia ? state.title : L("playback.waiting")
-        artist.stringValue = state.hasMedia ? state.artist : ""
+        title.setText(NSAttributedString(string: state.hasMedia ? state.title : L("playback.waiting"), attributes: [
+            .font: NSFont.systemFont(ofSize: 12, weight: .semibold), .foregroundColor: NSColor.white]),
+            animateChange: animateChange)
+        artist.setText(NSAttributedString(string: state.hasMedia ? state.artist : "", attributes: [
+            .font: NSFont.systemFont(ofSize: 10), .foregroundColor: NSColor(white: 0.62, alpha: 1)]),
+            animateChange: animateChange)
         title.toolTip = state.title
         artist.toolTip = state.artist
         if artwork != state.artworkData || cover.image == nil {
@@ -160,6 +186,7 @@ final class MiniPlayerView: NSView {
         expand.setAccessibilityValue(title.stringValue)
         seek.setAccessibilityLabel(L("touchbar.playback_position"))
         seek.isEnabled = state.hasMedia && state.timeline.isValid && !state.seekPending
+        if favoriteChanged { needsLayout = true }
         refreshTimeline()
     }
 
@@ -190,17 +217,25 @@ final class MiniPlayerView: NSView {
         let coverY = bounds.height - MiniPlayerStyle.edgeTransition - MiniPlayerStyle.contentInset - MiniPlayerStyle.artworkSize
         coverArea.frame = NSRect(x: coverX, y: coverY, width: MiniPlayerStyle.artworkSize, height: MiniPlayerStyle.artworkSize)
         let textX = coverArea.frame.maxX + 14
-        title.frame = NSRect(x: textX, y: announcing ? 41 : 50,
+        title.frame = NSRect(x: textX, y: announcing ? 41 : 53,
                              width: max(20, right - textX - (announcing ? 0 : 32)), height: 16)
-        artist.frame = NSRect(x: textX, y: announcing ? 24 : 35,
+        artist.frame = NSRect(x: textX, y: announcing ? 24 : 38,
                               width: max(20, right - textX - (announcing ? 0 : 32)), height: 14)
-        favorite.frame = NSRect(x: right - 26, y: 44, width: 26, height: 26)
-        previous.frame = NSRect(x: textX - 2, y: 8, width: 26, height: 24)
-        play.frame = NSRect(x: textX + 27, y: 8, width: 26, height: 24)
-        next.frame = NSRect(x: textX + 56, y: 8, width: 26, height: 24)
+        previous.frame = NSRect(x: textX - 2, y: 4, width: 26, height: 24)
+        play.frame = NSRect(x: textX + 27, y: 4, width: 26, height: 24)
+        next.frame = NSRect(x: textX + 56, y: 4, width: 26, height: 24)
         let seekX = textX + 94
-        seek.frame = NSRect(x: seekX, y: 20, width: max(20, right - seekX), height: 14)
-        time.frame = NSRect(x: seekX, y: 4, width: max(20, right - seekX), height: 12)
+        seek.frame = NSRect(x: seekX, y: play.frame.midY - 7, width: max(20, right - seekX), height: 14)
+        // Align visible content, not the controls' padded hit rectangles.
+        let contentRight = seek.frame.maxX - seekTrailingInset
+        time.frame = NSRect(x: seekX, y: seek.frame.maxY + 2, width: max(20, contentRight - seekX), height: 12)
+        let favoriteBounds = NSRect(x: 0, y: 0, width: 26, height: 26)
+        let imageRect = favorite.cell?.imageRect(forBounds: favoriteBounds) ?? favoriteBounds
+        var imageRight = imageRect.maxX
+        if let image = favorite.image, image.size.width > 0, image.alignmentRect.width > 0 {
+            imageRight = imageRect.minX + image.alignmentRect.maxX * imageRect.width / image.size.width
+        }
+        favorite.frame = NSRect(x: contentRight - imageRight, y: 44, width: 26, height: 26)
         let edge = surfaceEdge
         let body = NSRect(x: bounds.maxX - pose.size.width + edge, y: 0,
                           width: max(0, pose.size.width - edge), height: max(0, pose.size.height - edge))
@@ -306,31 +341,107 @@ private final class MiniPlayerSlider: NSSlider {
     var onBegin: (() -> Void)?
     var onFinish: (() -> Void)?
     private(set) var isDragging = false
+    private var hovering = false
+    private var tracking: NSTrackingArea?
+    private var emphasisTimer: Timer?
+    private var emphasis: CGFloat = 0
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let tracking { removeTrackingArea(tracking) }
+        let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self)
+        addTrackingArea(area)
+        tracking = area
+    }
+    override func mouseEntered(with event: NSEvent) { hovering = true; updateEmphasis() }
+    override func mouseExited(with event: NSEvent) { hovering = false; updateEmphasis() }
+
+    private func updateEmphasis() {
+        emphasisTimer?.invalidate()
+        emphasisTimer = nil
+        let target: CGFloat = isEnabled && (hovering || isDragging) ? 1 : 0
+        let initial = emphasis
+        let began = ProcessInfo.processInfo.systemUptime
+        func apply(_ value: CGFloat) {
+            self.emphasis = value
+            (self.cell as? MiniPlayerSliderCell)?.emphasis = value
+            self.needsDisplay = true
+        }
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { apply(target); return }
+        let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] timer in
+            guard let self else { timer.invalidate(); return }
+            let t = min(1, (ProcessInfo.processInfo.systemUptime - began) / 0.16)
+            let eased = CGFloat(t * t * (3 - 2 * t))
+            self.emphasis = initial + (target - initial) * eased
+            (self.cell as? MiniPlayerSliderCell)?.emphasis = self.emphasis
+            self.needsDisplay = true
+            if t >= 1 { timer.invalidate(); self.emphasisTimer = nil }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        emphasisTimer = timer
+    }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func mouseDown(with event: NSEvent) {
         guard isEnabled else { return }
         isDragging = true
+        updateEmphasis()
         onBegin?()
         super.mouseDown(with: event)
         isDragging = false
         onFinish?()
+        if let window {
+            hovering = bounds.contains(convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil))
+        }
+        updateEmphasis()
     }
+    deinit { emphasisTimer?.invalidate() }
 }
 
 private final class MiniPlayerSliderCell: NSSliderCell {
+    var onTrackGeometry: ((CGFloat) -> Void)?
+    var emphasis: CGFloat = 0
     override func drawBar(inside rect: NSRect, flipped: Bool) {
         let knob = knobRect(flipped: flipped)
-        let track = NSRect(x: rect.minX, y: knob.midY - 2, width: rect.width, height: 4)
-        NSColor(white: 0.2, alpha: 1).setFill()
-        NSBezierPath(roundedRect: track, xRadius: 2, yRadius: 2).fill()
-        NSColor.systemPink.setFill()
+        // The native knob's center travels between half-knob insets. Match
+        // that range instead of painting a track underneath the reserved ends.
+        let inset = min(rect.width / 2, knob.width / 2)
+        let height: CGFloat = 3 + 2 * emphasis
+        let track = NSRect(x: rect.minX + inset, y: knob.midY - height / 2,
+                           width: max(0, rect.width - 2 * inset), height: height)
+        if let controlView { onTrackGeometry?(max(0, controlView.bounds.maxX - track.maxX)) }
+        NSColor.white.withAlphaComponent(0.13 + 0.06 * emphasis).setFill()
+        NSBezierPath(roundedRect: track, xRadius: height / 2, yRadius: height / 2).fill()
         // AppKit reserves knob travel margins. Use its actual knob position
         // instead of deriving a second, differently inset position from value.
-        let filledWidth = min(track.width, max(0, knob.midX - track.minX))
-        NSBezierPath(roundedRect: NSRect(x: track.minX, y: track.minY, width: filledWidth, height: 4), xRadius: 2, yRadius: 2).fill()
+        let filledWidth = doubleValue <= minValue ? 0 : min(track.width, max(0, knob.midX - track.minX))
+        if filledWidth > 0 {
+            let fill = NSBezierPath(roundedRect: NSRect(x: track.minX, y: track.minY, width: filledWidth, height: height),
+                                    xRadius: height / 2, yRadius: height / 2)
+            NSGradient(starting: .systemPink, ending: NSColor(calibratedRed: 1, green: 0.38, blue: 0.5, alpha: 1))?
+                .draw(in: fill, angle: 0)
+        }
     }
     override func drawKnob(_ knobRect: NSRect) {
-        NSColor.white.setFill()
-        NSBezierPath(ovalIn: NSRect(x: knobRect.midX - 3.5, y: knobRect.midY - 3.5, width: 7, height: 7)).fill()
+        guard emphasis > 0, isEnabled else { return }
+        let diameter: CGFloat = 7 * emphasis
+        NSColor.systemPink.withAlphaComponent(0.15 * emphasis).setFill()
+        NSBezierPath(ovalIn: NSRect(x: knobRect.midX - 6, y: knobRect.midY - 6, width: 12, height: 12)).fill()
+        NSColor.white.withAlphaComponent(emphasis).setFill()
+        NSBezierPath(ovalIn: NSRect(x: knobRect.midX - diameter / 2, y: knobRect.midY - diameter / 2,
+                                  width: diameter, height: diameter)).fill()
+    }
+}
+
+/// Draw flush to the shared trailing guide, without NSTextField's text inset.
+private final class MiniPlayerTimeLabel: NSTextField {
+    override func draw(_ dirtyRect: NSRect) {
+        let text = NSAttributedString(string: stringValue, attributes: [
+            .font: font ?? NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .regular),
+            .foregroundColor: textColor ?? NSColor.secondaryLabelColor])
+        let size = text.size()
+        NSGraphicsContext.saveGraphicsState()
+        bounds.clip()
+        text.draw(at: NSPoint(x: bounds.maxX - size.width, y: bounds.midY - size.height / 2))
+        NSGraphicsContext.restoreGraphicsState()
     }
 }

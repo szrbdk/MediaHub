@@ -113,6 +113,7 @@ final class MiniPlayerPresenter {
         transition.move(to: form, at: ProcessInfo.processInfo.systemUptime,
                         animated: animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
         if form != .hidden {
+            content.setPresented(true)
             window.orderFrontRegardless()
         }
         advancePresentation()
@@ -139,7 +140,10 @@ final class MiniPlayerPresenter {
         let capturedPress = NSEvent.pressedMouseButtons & 1 != 0 && panel?.ignoresMouseEvents == false
         panel?.ignoresMouseEvents = !finished || visibility.form == .announcement || visibility.form == .hidden
             || (!capturedPress && !pointerIsOnSurface(NSEvent.mouseLocation))
-        if finished, visibility.form == .hidden { panel?.orderOut(nil) }
+        if finished, visibility.form == .hidden {
+            content.setPresented(false)
+            panel?.orderOut(nil)
+        }
     }
 
     private func hideImmediately() {
@@ -148,6 +152,7 @@ final class MiniPlayerPresenter {
         transition.move(to: .hidden, at: ProcessInfo.processInfo.systemUptime, animated: false)
         appliedForm = nil
         content.cancelSeek()
+        content.setPresented(false)
         panel?.orderOut(nil)
     }
 
