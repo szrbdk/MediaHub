@@ -367,6 +367,9 @@ for position in [NotificationPosition.topLeft, .topCenter, .topRight] {
     expect(detached.maxY == notificationScreen.maxY - 40, "Detached cards must leave a gap below both the menu bar and notch")
     expect(detached.maxY < attached.maxY, "Visible menu bars must move notifications below the attached-card anchor")
     expect(notificationScreen.contains(detached), "Detached notifications must remain on screen")
+    let body = position.surfaceRect(size: detached.size, in: detached.size, detached: true)
+    expect(body.height == 80 && body.maxY == detached.height,
+           "Detached top cards must match the attached body's 80pt height and retain their top anchor")
 }
 expect(preferences.notificationPosition == .topCenter, "Invalid positions must fall back to top center")
 expect(preferences.isEnabled(.notifications), "Notifications should default to enabled")

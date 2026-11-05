@@ -292,7 +292,10 @@ final class MiniPlayerView: NSView {
         let coverY = bounds.height - MiniPlayerStyle.edgeTransition - MiniPlayerStyle.contentInset - MiniPlayerStyle.artworkSize
         coverArea.frame = NSRect(x: coverX, y: coverY, width: MiniPlayerStyle.artworkSize, height: MiniPlayerStyle.artworkSize)
         if position.isTop { coverArea.frame.origin.y = bounds.height - coverArea.frame.maxY }
-        if detached { coverArea.frame.origin.y = bounds.midY - MiniPlayerStyle.artworkSize / 2 }
+        if detached {
+            let body = position.surfaceRect(size: bounds.size, in: bounds.size, detached: true)
+            coverArea.frame.origin.y = body.midY - MiniPlayerStyle.artworkSize / 2
+        }
         playbackBadge.frame = NSRect(x: coverArea.frame.maxX - 15, y: coverArea.frame.minY - 3, width: 18, height: 18)
         let textX = coverArea.frame.maxX + 14
         title.frame = NSRect(x: textX, y: 53,
@@ -340,7 +343,7 @@ final class MiniPlayerView: NSView {
 
     private func surfacePath() -> CGPath {
         if detached {
-            let rect = position.surfaceRect(size: pose.size, in: bounds.size)
+            let rect = position.surfaceRect(size: pose.size, in: bounds.size, detached: true)
             let radius = min(MiniPlayerStyle.panelRadius, rect.width / 2, rect.height / 2)
             return CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil)
         }

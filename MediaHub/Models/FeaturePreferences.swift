@@ -28,9 +28,13 @@ enum NotificationPosition: String, CaseIterable {
                       width: width, height: height)
     }
 
-    func surfaceRect(size: CGSize, in canvas: CGSize) -> CGRect {
+    func surfaceRect(size: CGSize, in canvas: CGSize, detached: Bool = false) -> CGRect {
         let x = isLeft ? 0 : (isRight ? canvas.width - size.width : (canvas.width - size.width) / 2)
-        return CGRect(x: x, y: isTop ? canvas.height - size.height : 0, width: size.width, height: size.height)
+        // Attached surfaces reserve this strip for their concave edge joins.
+        // Detached cards must match the body, not fill the extra strip.
+        let join = detached ? min(16, size.width / 4, size.height / 4) : 0
+        let height = max(0, size.height - join)
+        return CGRect(x: x, y: isTop ? canvas.height - height : 0, width: size.width, height: height)
     }
 
 }
