@@ -345,18 +345,29 @@ for position in NotificationPosition.allCases {
     expect(FeaturePreferences(store: preferenceStore).notificationPosition == position, "Every notification position must persist")
     let frame = position.frame(in: notificationScreen, safeTop: 32)
     expect(notificationScreen.contains(frame), "Notification frames must stay inside the selected screen")
-    expect(position.isTop ? frame.maxY == notificationScreen.maxY : frame.minY == notificationScreen.minY + 16,
+    expect(position.isTop ? frame.maxY == notificationScreen.maxY - 32 : frame.minY == notificationScreen.minY,
            "Notifications must align with their selected vertical edge")
-    let hidden = position.hiddenFrame(for: frame)
-    expect(position.isTop ? hidden.minY > notificationScreen.maxY : hidden.maxY < notificationScreen.minY,
-           "Notification animations must exit through the selected edge")
+    for size in [CGSize.zero, CGSize(width: 64, height: 32), CGSize(width: 336, height: 96)] {
+        let surface = position.surfaceRect(size: size, in: frame.size)
+        expect(position.isTop ? surface.maxY == frame.height : surface.minY == 0,
+               "The notification surface must stay attached to its chosen vertical edge during every transition")
+        expect(position.isLeft ? surface.minX == 0 : (position.isRight ? surface.maxX == frame.width : surface.midX == frame.width / 2),
+               "Corner notifications must grow diagonally; center notifications must grow symmetrically from the edge")
+    }
     switch position {
-    case .topLeft, .bottomLeft: expect(frame.minX == notificationScreen.minX + 16, "Left positions must align left")
+    case .topLeft, .bottomLeft: expect(frame.minX == notificationScreen.minX, "Left positions must align left")
     case .topCenter, .bottomCenter: expect(frame.midX == notificationScreen.midX, "Center positions must align centrally")
-    case .topRight, .bottomRight: expect(frame.maxX == notificationScreen.maxX - 16, "Right positions must align right")
+    case .topRight, .bottomRight: expect(frame.maxX == notificationScreen.maxX, "Right positions must align right")
     }
 }
 preferenceStore.values["notificationPosition"] = "invalid"
+for position in [NotificationPosition.topLeft, .topCenter, .topRight] {
+    let attached = position.frame(in: notificationScreen, safeTop: 32)
+    let detached = position.frame(in: notificationScreen, safeTop: 32, detached: true, menuBarHeight: 24)
+    expect(detached.maxY == notificationScreen.maxY - 40, "Detached cards must leave a gap below both the menu bar and notch")
+    expect(detached.maxY < attached.maxY, "Visible menu bars must move notifications below the attached-card anchor")
+    expect(notificationScreen.contains(detached), "Detached notifications must remain on screen")
+}
 expect(preferences.notificationPosition == .topCenter, "Invalid positions must fall back to top center")
 expect(preferences.isEnabled(.notifications), "Notifications should default to enabled")
 expect(preferences.isEnabled(.touchBar), "Touch Bar should default to enabled")
@@ -662,11 +673,17 @@ expect(miniAnnouncements.form == .announcement, "A newer song must replace the a
 miniAnnouncements.update(at: 15, pointerInside: false, pointerInCorner: false)
 expect(miniAnnouncements.form == .hidden, "Announcements must restore an originally hidden player")
 miniAnnouncements.observeTrack(track("Newest song", playing: false), enabled: true, now: 16)
-miniAnnouncements.observeTrack(track("Newest song"), enabled: true, now: 17)
-expect(miniAnnouncements.form == .hidden, "Pause and resume must not open a mini-player track announcement")
-miniAnnouncements.observeTrack(track("Paused selection", playing: false), enabled: true, now: 18)
+expect(miniAnnouncements.form == .announcement, "Pausing must open the mini-player announcement just like normal notifications")
+miniAnnouncements.update(at: 19, pointerInside: false, pointerInCorner: false)
+expect(miniAnnouncements.form == .hidden, "Pause announcements must restore the previous hidden form")
+miniAnnouncements.observeTrack(track("Newest song"), enabled: true, now: 20)
+expect(miniAnnouncements.form == .announcement, "Resuming must open the mini-player announcement just like normal notifications")
+miniAnnouncements.observeTrack(track("Newest song"), enabled: true, now: 21)
+miniAnnouncements.update(at: 23, pointerInside: false, pointerInCorner: false)
+expect(miniAnnouncements.form == .hidden, "Repeated playback snapshots must not extend the announcement deadline")
+miniAnnouncements.observeTrack(track("Paused selection", playing: false), enabled: true, now: 24)
 expect(miniAnnouncements.form == .hidden, "A paused selection must wait until playback starts")
-miniAnnouncements.observeTrack(track("Paused selection"), enabled: true, now: 19)
+miniAnnouncements.observeTrack(track("Paused selection"), enabled: true, now: 25)
 expect(miniAnnouncements.form == .announcement, "A new paused selection must announce when playback starts")
 miniAnnouncements.expand()
 miniAnnouncements.update(at: 30, pointerInside: false, pointerInCorner: false)
@@ -719,6 +736,15 @@ for (from, to) in miniTransitionCases {
     expect(motion.isFinished(at: 1.3), "Every surface transition must finish in bounded time")
 }
 var reversedMotion = MiniPlayerTransition()
+var closingCard = MiniPlayerTransition()
+closingCard.move(to: .announcement, at: 0, animated: false)
+closingCard.move(to: .hidden, at: 1, animated: true)
+let closingMidpoint = closingCard.pose(at: 1.13)
+expect(closingMidpoint.size.width > 0 && closingMidpoint.size.width < 336 && closingMidpoint.opacity == 1,
+       "Closing cards must visibly shrink before fading away")
+expect(closingCard.pose(at: 1.22).opacity == 1, "The surface must remain opaque through most of the closing movement")
+expect(closingCard.pose(at: 1.27).opacity == 0 && closingCard.isFinished(at: 1.27),
+       "Closing cards must disappear only at the end of the transition")
 reversedMotion.move(to: .expanded, at: 0, animated: false)
 reversedMotion.move(to: .compact, at: 1, animated: true)
 let beforeReversal = reversedMotion.pose(at: 1.1)

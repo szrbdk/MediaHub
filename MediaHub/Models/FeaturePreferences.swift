@@ -10,24 +10,29 @@ enum NotificationPosition: String, CaseIterable {
     case topLeft, topCenter, topRight, bottomLeft, bottomCenter, bottomRight
 
     var isTop: Bool { [.topLeft, .topCenter, .topRight].contains(self) }
+    var isLeft: Bool { self == .topLeft || self == .bottomLeft }
+    var isRight: Bool { self == .topRight || self == .bottomRight }
     var localizationKey: String { "notification.position.\(rawValue)" }
 
-    func frame(in screen: CGRect, safeTop: CGFloat) -> CGRect {
-        let width = min(400, screen.width - 32)
-        let height = 112 + (isTop ? safeTop : 0)
+    func frame(in screen: CGRect, safeTop: CGFloat, detached: Bool = false, menuBarHeight: CGFloat = 0) -> CGRect {
+        let width = min(336, screen.width)
+        let height: CGFloat = 96
         let x: CGFloat
         switch self {
-        case .topLeft, .bottomLeft: x = screen.minX + 16
+        case .topLeft, .bottomLeft: x = screen.minX + (detached ? 12 : 0)
         case .topCenter, .bottomCenter: x = screen.midX - width / 2
-        case .topRight, .bottomRight: x = screen.maxX - width - 16
+        case .topRight, .bottomRight: x = screen.maxX - width - (detached ? 12 : 0)
         }
-        return CGRect(x: x, y: isTop ? screen.maxY - height : screen.minY + 16,
+        let topInset = detached ? max(safeTop, menuBarHeight) + 8 : safeTop
+        return CGRect(x: x, y: isTop ? screen.maxY - topInset - height : screen.minY,
                       width: width, height: height)
     }
 
-    func hiddenFrame(for frame: CGRect) -> CGRect {
-        frame.offsetBy(dx: 0, dy: (isTop ? 1 : -1) * (frame.height + 18))
+    func surfaceRect(size: CGSize, in canvas: CGSize) -> CGRect {
+        let x = isLeft ? 0 : (isRight ? canvas.width - size.width : (canvas.width - size.width) / 2)
+        return CGRect(x: x, y: isTop ? canvas.height - size.height : 0, width: size.width, height: size.height)
     }
+
 }
 
 protocol PreferenceStore {

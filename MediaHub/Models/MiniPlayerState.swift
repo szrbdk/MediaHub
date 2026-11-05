@@ -9,26 +9,18 @@ struct MiniPlayerState {
     private var cornerSince: Double?
     private var announcementUntil: Double?
     private var returnForm: Form = .compact
-    private var initializedTrack = false
-    private var lastTrack: [String]?
-    private var pendingTrack = false
+    private var announcements = TrackAnnouncementState()
 
     mutating func expand() { form = .expanded; idleSince = nil; cornerSince = nil; announcementUntil = nil }
     mutating func collapse(at now: Double) { form = .compact; idleSince = now; cornerSince = nil; announcementUntil = nil }
 
     mutating func observeTrack(_ state: MediaState, enabled: Bool, now: Double) {
-        guard state.hasMedia else { return }
-        let identity = [state.bundleIdentifier, state.title, state.artistText]
-        if !initializedTrack { initializedTrack = true; lastTrack = identity; return }
-        if lastTrack != identity { lastTrack = identity; pendingTrack = true }
+        let announcement = announcements.observe(state, enabled: enabled)
         guard enabled else {
-            pendingTrack = false
             if form == .announcement { form = returnForm; announcementUntil = nil; idleSince = now }
             return
         }
-        guard pendingTrack, state.playing else { return }
-        pendingTrack = false
-        guard form != .expanded else { return }
+        guard announcement != nil, form != .expanded else { return }
         if form != .announcement { returnForm = form }
         form = .announcement
         announcementUntil = now + 3
@@ -94,10 +86,15 @@ struct MiniPlayerTransition {
     func pose(at now: Double) -> Pose {
         let progress = duration > 0 ? min(1, max(0, (now - beganAt) / duration)) : 1
         let t = CGFloat(progress * progress * (3 - 2 * progress))
+        // Keep the surface visible while it retracts. Fading throughout the
+        // entire shrink made the card appear to vanish before reaching the corner.
+        let fadePhase = destination.opacity < source.opacity && duration > 0
+            ? min(1, max(0, (progress - 0.85) / 0.15)) : progress
+        let opacityT = CGFloat(fadePhase * fadePhase * (3 - 2 * fadePhase))
         return Pose(size: CGSize(width: source.size.width + (destination.size.width - source.size.width) * t,
                                  height: source.size.height + (destination.size.height - source.size.height) * t),
                     wide: source.wide + (destination.wide - source.wide) * t,
-                    opacity: source.opacity + (destination.opacity - source.opacity) * t)
+                    opacity: source.opacity + (destination.opacity - source.opacity) * opacityT)
     }
     func isFinished(at now: Double) -> Bool { duration == 0 || now >= beganAt + duration }
     mutating func move(to form: MiniPlayerState.Form, at now: Double, animated: Bool) {

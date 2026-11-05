@@ -1,9 +1,13 @@
 import AppKit
-import QuartzCore
 
 /// An app-owned overlay; never activates MediaHub or requests notification access.
 final class TrackNotificationPresenter {
     private var panel: TrackNotificationPanel?
+    private let content = MiniPlayerView(frame: .zero)
+    private var transition = MiniPlayerTransition()
+    private var animationTimer: Timer?
+    private var environmentTimer: Timer?
+    private var dismissing = false
     private var pendingShow: DispatchWorkItem?
     private var pendingDismiss: DispatchWorkItem?
     private var generation = 0
@@ -81,14 +85,14 @@ final class TrackNotificationPresenter {
         self.currentAnnouncement = updated
         // Artwork can arrive after the song metadata. Update the visible card
         // without replaying its animation or extending its dismissal deadline.
-        if panel?.isVisible == true { (panel?.contentView as? TrackNotificationView)?.update(updated) }
+        if panel?.isVisible == true { content.render(updated) }
     }
 
     private func present(_ announcement: TrackAnnouncement) {
         guard enabled, !suspended else { return }
         guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
-        let visibleFrame = position.frame(in: screen.frame, safeTop: screen.safeAreaInsets.top)
-        let hiddenFrame = position.hiddenFrame(for: visibleFrame)
+        let placement = placement(on: screen)
+        let visibleFrame = placement.frame
         let window: TrackNotificationPanel
         if let panel { window = panel }
         else {
@@ -101,55 +105,87 @@ final class TrackNotificationPresenter {
             window.ignoresMouseEvents = true
             window.isReleasedWhenClosed = false
             window.animationBehavior = .none
-            window.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
+            window.level = .floating
             window.collectionBehavior = [.canJoinAllSpaces, .canJoinAllApplications, .fullScreenAuxiliary,
                                          .stationary, .ignoresCycle]
             window.appearance = NSAppearance(named: .darkAqua)
-            window.contentView = TrackNotificationView(frame: NSRect(origin: .zero, size: visibleFrame.size))
+            window.contentView = content
             panel = window
         }
-        if let previousScreen = window.screen, previousScreen != screen { window.orderOut(nil) }
-        (window.contentView as? TrackNotificationView)?.update(announcement)
-        if !window.isVisible {
-            window.setFrame(hiddenFrame, display: false)
-            window.alphaValue = 0
+        if let previousScreen = window.screen, previousScreen != screen {
+            window.orderOut(nil)
+            transition.move(to: .hidden, at: ProcessInfo.processInfo.systemUptime, animated: false)
         }
+        window.setFrame(visibleFrame, display: false)
+        content.setPosition(position)
+        content.setDetached(placement.detached)
+        content.setForm(.announcement)
+        content.render(announcement)
+        content.setPresented(true)
+        dismissing = false
+        transition.move(to: .announcement, at: ProcessInfo.processInfo.systemUptime,
+                        animated: !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
         window.orderFrontRegardless()
-        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = reduceMotion ? 0 : 0.28
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            window.animator().setFrame(visibleFrame, display: true)
-            window.animator().alphaValue = 1
-        }
+        animate()
+        environmentTimer?.invalidate()
+        let environmentTimer = Timer(timeInterval: 0.15, repeats: true) { [weak self] _ in self?.refreshPlacement() }
+        environmentTimer.tolerance = 0.03
+        RunLoop.main.add(environmentTimer, forMode: .common)
+        self.environmentTimer = environmentTimer
         let expectedGeneration = generation
         let work = DispatchWorkItem { [weak self] in
             guard let self, self.generation == expectedGeneration else { return }
             self.dismiss(animated: true)
         }
         pendingDismiss = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.28, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.26, execute: work)
     }
 
     private func dismiss(animated: Bool) {
         generation += 1
-        let expectedGeneration = generation
         pendingShow?.cancel()
         pendingDismiss?.cancel()
         currentAnnouncement = nil
-        guard let panel, panel.isVisible else { return }
-        guard animated, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
-            panel.orderOut(nil)
-            return
-        }
-        let hiddenFrame = position.hiddenFrame(for: panel.frame)
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.22
-            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
-            panel.animator().setFrame(hiddenFrame, display: true)
-            panel.animator().alphaValue = 0
-        } completionHandler: { [weak self, weak panel] in
-            guard self?.generation == expectedGeneration else { return }
+        environmentTimer?.invalidate()
+        environmentTimer = nil
+        dismissing = true
+        transition.move(to: .hidden, at: ProcessInfo.processInfo.systemUptime,
+                        animated: animated && panel?.isVisible == true && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+        animate()
+    }
+
+    private func placement(on screen: NSScreen) -> (frame: NSRect, detached: Bool) {
+        let detached = position.isTop && NSMenu.menuBarVisible()
+        let barHeight = max(NSStatusBar.system.thickness, screen.frame.maxY - screen.visibleFrame.maxY)
+        return (position.frame(in: screen.frame, safeTop: screen.safeAreaInsets.top,
+                               detached: detached, menuBarHeight: barHeight), detached)
+    }
+
+    private func refreshPlacement() {
+        guard !dismissing, let panel, panel.isVisible, let screen = panel.screen else { return }
+        let placement = placement(on: screen)
+        content.setDetached(placement.detached)
+        if panel.frame != placement.frame { panel.setFrame(placement.frame, display: true) }
+    }
+
+    private func animate() {
+        animationTimer?.invalidate()
+        animationTimer = nil
+        advancePresentation()
+        guard !transition.isFinished(at: ProcessInfo.processInfo.systemUptime) else { return }
+        let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in self?.advancePresentation() }
+        RunLoop.main.add(timer, forMode: .common)
+        animationTimer = timer
+    }
+
+    private func advancePresentation() {
+        let now = ProcessInfo.processInfo.systemUptime
+        content.present(transition.pose(at: now))
+        guard transition.isFinished(at: now) else { return }
+        animationTimer?.invalidate()
+        animationTimer = nil
+        if dismissing {
+            content.setPresented(false)
             panel?.orderOut(nil)
         }
     }

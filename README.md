@@ -65,17 +65,19 @@ Automatic skipping stops after 10 consecutive skips to avoid getting stuck in a 
 
 Choose **Notification position** in the menu bar to place notifications at the top or bottom, aligned left, center, or right. The default is top center, and your choice is saved.
 
-A quiet card slides in from the selected edge, stays visible for a few seconds, and disappears without taking focus. A small play/pause badge shows the playback state. The panel is designed to appear over full-screen apps too.
+A compact card grows from the selected corner or edge, stays visible for a few seconds, and retracts to the same place without taking focus. It shares the mini player's design, with artwork, track, artist, album, and a play/pause badge. The panel is designed to appear over full-screen apps too.
+
+Top notifications float below the menu bar while it is visible and join the screen edge when it is hidden. An opaque dark surface keeps text readable over both light and dark backgrounds.
 
 Choose **On-screen display → Notifications**, **Mini player**, or **Off** in the menu bar. Your selection is saved; notifications and the mini player never appear together. Touch Bar controls work independently. MediaHub does not change Music's own notification settings; you can disable those separately in System Settings if you see both.
 
 ## Mini player
 
-The mini player sits in the bottom-right corner of your primary screen, including over full-screen apps. It shows artwork, the track and artist, playback controls, a Music favorite button, and a seek bar. Drag the seek bar to preview a position and release to apply it.
+The mini player sits in the bottom-right corner of your primary screen, including over full-screen apps. It shows artwork, the track, artist and album, playback controls, a Music favorite button, and a seek bar. Drag the seek bar to preview a position and release to apply it.
 
 The expanded player stays visible until you collapse it. Hover over the artwork to reveal the collapse button. The compact square hides after the pointer has been away for three seconds. Move the pointer to the bottom-right corner briefly to bring it back, then click to expand. With no media playing, you can still reveal the player to see its waiting state.
 
-While collapsed, a new track briefly opens a card with just artwork, title, and artist before returning to the compact or hidden state. The card uses the same size as the expanded player. Transitions grow from the bottom-right corner and shrink back into it.
+While collapsed, a track change or a pause/resume briefly opens the same notification card with artwork, title, artist, album, and playback state before returning to the compact or hidden state. It follows the same announcement rules as notifications. The card uses the same size as the expanded player. Transitions grow from the bottom-right corner and shrink back into it.
 
 ## Language
 

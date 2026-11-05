@@ -1,6 +1,7 @@
 import AppKit
 
 private enum MiniPlayerStyle {
+    static let secondaryTextColor = NSColor(white: 0.62, alpha: 1)
     static let artworkRadius: CGFloat = 9
     static let contentInset: CGFloat = 14
     // Concentric outer and inner corners: outer radius = inner radius + inset.
@@ -17,9 +18,14 @@ final class MiniPlayerView: NSView {
     private var state = MediaState()
     private var form: MiniPlayerState.Form = .expanded
     private var presented = false
+    private var position: NotificationPosition = .bottomRight
+    private var detached = false
     private var pose = MiniPlayerTransition.Pose.target(.hidden)
     private let surface = CAShapeLayer()
     private let surfaceMask = CAShapeLayer()
+    private let tint = MiniPlayerDecoration()
+    private let outline = MiniPlayerDecoration()
+    private let border = CAShapeLayer()
     private var artwork: Data?
     private var seekTrackKey: String?
     private var seekTrailingInset: CGFloat = 0
@@ -27,6 +33,8 @@ final class MiniPlayerView: NSView {
     private var cover: NSImageView { coverArea.imageView }
     private let title = MarqueeLabel(labelWithString: "")
     private let artist = MarqueeLabel(labelWithString: "")
+    private let album = MarqueeLabel(labelWithString: "")
+    private let playbackBadge = NSImageView()
     private let time = MiniPlayerTimeLabel(labelWithString: "")
     private let details = NSView()
     private let seek = MiniPlayerSlider(value: 0, minValue: 0, maxValue: 1, target: nil, action: nil)
@@ -39,8 +47,9 @@ final class MiniPlayerView: NSView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
-        surface.fillColor = NSColor(white: 0.025, alpha: 1).cgColor
-        layer?.insertSublayer(surface, at: 0)
+        tint.wantsLayer = true
+        tint.layer?.addSublayer(surface)
+        addSubview(tint)
         layer?.mask = surfaceMask
         alphaValue = 0
         addSubview(details)
@@ -54,15 +63,22 @@ final class MiniPlayerView: NSView {
         title.font = .systemFont(ofSize: 12, weight: .semibold)
         title.textColor = .white
         artist.font = .systemFont(ofSize: 10)
-        artist.textColor = NSColor(white: 0.62, alpha: 1)
+        artist.textColor = MiniPlayerStyle.secondaryTextColor
         time.font = .monospacedDigitSystemFont(ofSize: 9, weight: .regular)
-        time.textColor = NSColor(white: 0.5, alpha: 1)
+        time.textColor = MiniPlayerStyle.secondaryTextColor
         time.alignment = .right
-        for label in [title, artist, time] {
+        for label in [title, artist, album, time] {
             label.maximumNumberOfLines = 1
             label.lineBreakMode = .byTruncatingTail
             details.addSubview(label)
         }
+        playbackBadge.wantsLayer = true
+        playbackBadge.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.9).cgColor
+        playbackBadge.layer?.cornerRadius = 9
+        playbackBadge.contentTintColor = .white
+        playbackBadge.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 9, weight: .semibold)
+        playbackBadge.imageScaling = .scaleProportionallyDown
+        details.addSubview(playbackBadge)
         previous = button("backward.end.fill", action: #selector(goPrevious), parent: details)
         play = button("play.fill", action: #selector(togglePlayback), parent: details)
         next = button("forward.end.fill", action: #selector(goNext), parent: details)
@@ -88,6 +104,12 @@ final class MiniPlayerView: NSView {
             self.onAction?(.seek(fraction: self.seek.doubleValue, trackKey: key))
         }
         details.addSubview(seek)
+        outline.wantsLayer = true
+        border.fillColor = NSColor.clear.cgColor
+        border.strokeColor = NSColor.white.withAlphaComponent(0.1).cgColor
+        border.lineWidth = 0.5
+        outline.layer?.addSublayer(border)
+        addSubview(outline)
         render(state)
     }
 
@@ -137,10 +159,37 @@ final class MiniPlayerView: NSView {
         updateTextAnimations()
     }
 
+    func setPosition(_ position: NotificationPosition) {
+        self.position = position
+        needsLayout = true
+        updateSurface()
+    }
+
+    func setDetached(_ detached: Bool) {
+        guard self.detached != detached else { return }
+        self.detached = detached
+        needsLayout = true
+        updateSurface()
+    }
+
+    func render(_ announcement: TrackAnnouncement) {
+        var state = MediaState()
+        state.title = announcement.title
+        state.artist = announcement.artist
+        state.artistText = announcement.artist
+        state.album = announcement.album
+        state.artworkData = announcement.artworkData
+        state.bundleIdentifier = announcement.bundleIdentifier
+        state.playing = announcement.playing
+        state.trackKey = [state.bundleIdentifier, state.title, state.artist].map { "\($0.utf8.count):\($0)" }.joined()
+        render(state)
+    }
+
     private func updateTextAnimations() {
         let enabled = presented && pose.wide >= 0.999 && pose.opacity >= 0.999
         title.animationsEnabled = enabled
         artist.animationsEnabled = enabled
+        album.animationsEnabled = enabled && !album.isHidden
     }
 
     func containsSurface(_ point: NSPoint) -> Bool {
@@ -154,12 +203,28 @@ final class MiniPlayerView: NSView {
         let favoriteChanged = self.state.favorite != state.favorite
         if self.state.trackKey != state.trackKey || !state.timeline.isValid { cancelSeek() }
         self.state = state
+        let announcing = form == .announcement
+        let titleFont = NSFont.systemFont(ofSize: announcing ? 14 : 12, weight: .semibold)
+        let artistFont = NSFont.systemFont(ofSize: announcing ? 11 : 10)
+        let albumFont = NSFont.systemFont(ofSize: announcing ? 10 : 9)
+        title.font = titleFont
+        artist.font = artistFont
+        album.font = albumFont
         title.setText(NSAttributedString(string: state.hasMedia ? state.title : L("playback.waiting"), attributes: [
-            .font: NSFont.systemFont(ofSize: 12, weight: .semibold), .foregroundColor: NSColor.white]),
+            .font: titleFont, .foregroundColor: NSColor.white]),
             animateChange: animateChange)
         artist.setText(NSAttributedString(string: state.hasMedia ? state.artist : "", attributes: [
-            .font: NSFont.systemFont(ofSize: 10), .foregroundColor: NSColor(white: 0.62, alpha: 1)]),
+            .font: artistFont, .foregroundColor: MiniPlayerStyle.secondaryTextColor]),
             animateChange: animateChange)
+        album.setText(NSAttributedString(string: state.hasMedia ? state.album : "", attributes: [
+            .font: albumFont, .foregroundColor: MiniPlayerStyle.secondaryTextColor]),
+            animateChange: animateChange)
+        album.isHidden = state.album.isEmpty
+        album.toolTip = state.album
+        artist.isHidden = state.artist.isEmpty
+        playbackBadge.isHidden = form != .announcement
+        playbackBadge.image = NSImage(systemSymbolName: state.playing ? "play.fill" : "pause.fill", accessibilityDescription: nil)
+        playbackBadge.setAccessibilityLabel(L(state.playing ? "notification.now_playing" : "notification.paused"))
         title.toolTip = state.title
         artist.toolTip = state.artist
         if artwork != state.artworkData || cover.image == nil {
@@ -186,7 +251,8 @@ final class MiniPlayerView: NSView {
         expand.setAccessibilityValue(title.stringValue)
         seek.setAccessibilityLabel(L("touchbar.playback_position"))
         seek.isEnabled = state.hasMedia && state.timeline.isValid && !state.seekPending
-        if favoriteChanged { needsLayout = true }
+        if favoriteChanged || form == .announcement { needsLayout = true }
+        updateTextAnimations()
         refreshTimeline()
     }
 
@@ -197,30 +263,52 @@ final class MiniPlayerView: NSView {
     }
 
     func refreshTimeline() {
-        guard state.timeline.isValid else { time.stringValue = ""; seek.doubleValue = 0; return }
+        guard state.timeline.isValid else { updateTime(""); seek.doubleValue = 0; return }
         let position: Double
         if seek.isDragging, seekTrackKey == state.trackKey { position = seek.doubleValue * state.timeline.duration }
         else {
             position = state.timeline.position(at: Date().timeIntervalSince1970)
             seek.doubleValue = position / state.timeline.duration
         }
-        time.stringValue = "\(PlaybackTimeline.format(position)) / \(PlaybackTimeline.format(state.timeline.duration))"
+        updateTime("\(PlaybackTimeline.format(position)) / \(PlaybackTimeline.format(state.timeline.duration))")
         seek.setAccessibilityValue(PlaybackTimeline.format(position))
+    }
+
+    private func updateTime(_ value: String) {
+        guard time.stringValue != value else { return }
+        let oldWidth = time.contentWidth
+        time.stringValue = value
+        if time.contentWidth != oldWidth { needsLayout = true }
     }
 
     override func layout() {
         super.layout()
         details.frame = bounds
-        let right = bounds.width - 14
+        tint.frame = bounds
+        outline.frame = bounds
+        let right = bounds.width - MiniPlayerStyle.contentInset - (position.isRight || detached ? 0 : MiniPlayerStyle.edgeTransition)
         let announcing = form == .announcement
-        let coverX = MiniPlayerStyle.edgeTransition + MiniPlayerStyle.contentInset
+        let coverX = (position.isLeft || detached ? 0 : MiniPlayerStyle.edgeTransition) + MiniPlayerStyle.contentInset
         let coverY = bounds.height - MiniPlayerStyle.edgeTransition - MiniPlayerStyle.contentInset - MiniPlayerStyle.artworkSize
         coverArea.frame = NSRect(x: coverX, y: coverY, width: MiniPlayerStyle.artworkSize, height: MiniPlayerStyle.artworkSize)
+        if position.isTop { coverArea.frame.origin.y = bounds.height - coverArea.frame.maxY }
+        if detached { coverArea.frame.origin.y = bounds.midY - MiniPlayerStyle.artworkSize / 2 }
+        playbackBadge.frame = NSRect(x: coverArea.frame.maxX - 15, y: coverArea.frame.minY - 3, width: 18, height: 18)
         let textX = coverArea.frame.maxX + 14
-        title.frame = NSRect(x: textX, y: announcing ? 41 : 53,
+        title.frame = NSRect(x: textX, y: 53,
                              width: max(20, right - textX - (announcing ? 0 : 32)), height: 16)
-        artist.frame = NSRect(x: textX, y: announcing ? 24 : 38,
+        artist.frame = NSRect(x: textX, y: 38,
                               width: max(20, right - textX - (announcing ? 0 : 32)), height: 14)
+        album.frame = NSRect(x: textX, y: 37, width: max(20, right - textX - (announcing ? 0 : 32)), height: 11)
+        if announcing {
+            let rows: [(MarqueeLabel, CGFloat)] = [(title, 19), (artist, 15), (album, 13)].filter { !$0.0.isHidden }
+            let height = rows.reduce(CGFloat(0)) { $0 + $1.1 } + CGFloat(max(0, rows.count - 1)) * 4
+            var top = coverArea.frame.midY + height / 2
+            for (label, height) in rows {
+                label.frame = NSRect(x: textX, y: top - height, width: max(20, right - textX), height: height)
+                top -= height + 4
+            }
+        }
         previous.frame = NSRect(x: textX - 2, y: 4, width: 26, height: 24)
         play.frame = NSRect(x: textX + 27, y: 4, width: 26, height: 24)
         next.frame = NSRect(x: textX + 56, y: 4, width: 26, height: 24)
@@ -228,7 +316,12 @@ final class MiniPlayerView: NSView {
         seek.frame = NSRect(x: seekX, y: play.frame.midY - 7, width: max(20, right - seekX), height: 14)
         // Align visible content, not the controls' padded hit rectangles.
         let contentRight = seek.frame.maxX - seekTrailingInset
-        time.frame = NSRect(x: seekX, y: seek.frame.maxY + 2, width: max(20, contentRight - seekX), height: 12)
+        let timeWidth = min(time.contentWidth, max(0, contentRight - textX))
+        time.frame = NSRect(x: contentRight - timeWidth, y: seek.frame.maxY + 2, width: timeWidth, height: 12)
+        if !announcing {
+            album.frame = NSRect(x: textX, y: time.frame.minY,
+                                 width: max(0, time.frame.minX - textX - (timeWidth > 0 ? 10 : 0)), height: time.frame.height)
+        }
         let favoriteBounds = NSRect(x: 0, y: 0, width: 26, height: 26)
         let imageRect = favorite.cell?.imageRect(forBounds: favoriteBounds) ?? favoriteBounds
         var imageRight = imageRect.maxX
@@ -246,9 +339,15 @@ final class MiniPlayerView: NSView {
     private var surfaceEdge: CGFloat { min(MiniPlayerStyle.edgeTransition, pose.size.width / 4, pose.size.height / 4) }
 
     private func surfacePath() -> CGPath {
-        let w = bounds.maxX, h = pose.size.height, x = w - pose.size.width
+        if detached {
+            let rect = position.surfaceRect(size: pose.size, in: bounds.size)
+            let radius = min(MiniPlayerStyle.panelRadius, rect.width / 2, rect.height / 2)
+            return CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil)
+        }
+        let w = pose.size.width, h = pose.size.height, x: CGFloat = 0
         let edge = surfaceEdge
-        let radius = max(0, min(MiniPlayerStyle.panelRadius, (pose.size.width - edge) / 2, (h - edge) / 2))
+        let sideInsets: CGFloat = position.isLeft || position.isRight ? edge : 2 * edge
+        let radius = max(0, min(MiniPlayerStyle.panelRadius, (pose.size.width - sideInsets) / 2, (h - edge) / 2))
         let k: CGFloat = 0.55228475
         let path = CGMutablePath()
         path.move(to: CGPoint(x: x, y: 0))
@@ -257,21 +356,37 @@ final class MiniPlayerView: NSView {
         path.addCurve(to: CGPoint(x: x + edge + radius, y: h - edge),
                       control1: CGPoint(x: x + edge, y: h - edge - radius * (1 - k)),
                       control2: CGPoint(x: x + edge + radius * (1 - k), y: h - edge))
-        path.addLine(to: CGPoint(x: w - edge, y: h - edge))
-        path.addCurve(to: CGPoint(x: w, y: h), control1: CGPoint(x: w - edge * (1 - k), y: h - edge), control2: CGPoint(x: w, y: h - edge * k))
-        path.addLine(to: CGPoint(x: w, y: 0))
+        if position.isLeft || position.isRight {
+            path.addLine(to: CGPoint(x: w - edge, y: h - edge))
+            path.addCurve(to: CGPoint(x: w, y: h), control1: CGPoint(x: w - edge * (1 - k), y: h - edge), control2: CGPoint(x: w, y: h - edge * k))
+            path.addLine(to: CGPoint(x: w, y: 0))
+        } else {
+            path.addLine(to: CGPoint(x: w - edge - radius, y: h - edge))
+            path.addCurve(to: CGPoint(x: w - edge, y: h - edge - radius),
+                          control1: CGPoint(x: w - edge - radius * (1 - k), y: h - edge),
+                          control2: CGPoint(x: w - edge, y: h - edge - radius * (1 - k)))
+            path.addLine(to: CGPoint(x: w - edge, y: edge))
+            path.addCurve(to: CGPoint(x: w, y: 0), control1: CGPoint(x: w - edge, y: edge * (1 - k)), control2: CGPoint(x: w - edge * k, y: 0))
+        }
         path.closeSubpath()
-        return path
+        let rect = position.surfaceRect(size: pose.size, in: bounds.size)
+        var transform = CGAffineTransform(a: position.isLeft ? -1 : 1, b: 0, c: 0, d: position.isTop ? -1 : 1,
+                                         tx: position.isLeft ? rect.maxX : rect.minX,
+                                         ty: position.isTop ? rect.maxY : rect.minY)
+        return path.copy(using: &transform) ?? path
     }
 
     private func updateSurface() {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         let path = surfacePath()
+        surface.fillColor = NSColor(white: 0.025, alpha: 1).cgColor
         surface.frame = bounds
         surfaceMask.frame = bounds
         surface.path = path
         surfaceMask.path = path
+        border.frame = bounds
+        border.path = path
         CATransaction.commit()
     }
 
@@ -281,6 +396,10 @@ final class MiniPlayerView: NSView {
     @objc private func toggleFavorite() { onAction?(.toggleFavorite) }
     @objc private func previewSeek() { if seekTrackKey == state.trackKey { refreshTimeline() } }
     @objc private func expandPlayer() { onExpand?() }
+}
+
+private final class MiniPlayerDecoration: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 private final class MiniPlayerCover: NSView {
@@ -434,10 +553,14 @@ private final class MiniPlayerSliderCell: NSSliderCell {
 
 /// Draw flush to the shared trailing guide, without NSTextField's text inset.
 private final class MiniPlayerTimeLabel: NSTextField {
-    override func draw(_ dirtyRect: NSRect) {
-        let text = NSAttributedString(string: stringValue, attributes: [
+    private var text: NSAttributedString {
+        NSAttributedString(string: stringValue, attributes: [
             .font: font ?? NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .regular),
             .foregroundColor: textColor ?? NSColor.secondaryLabelColor])
+    }
+    var contentWidth: CGFloat { ceil(text.size().width) }
+    override func draw(_ dirtyRect: NSRect) {
+        let text = text
         let size = text.size()
         NSGraphicsContext.saveGraphicsState()
         bounds.clip()
