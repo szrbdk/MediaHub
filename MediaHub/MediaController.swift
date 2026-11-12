@@ -105,6 +105,7 @@ final class MediaController {
     }
 
     func changeBlacklist(_ entry: BlacklistEntry, adding: Bool) {
+        guard !adding || !state.isPodcast else { return }
         do {
             blacklist.reload()
             if adding { try blacklist.add(entry) }
@@ -206,9 +207,9 @@ final class MediaController {
         switch action {
         case .togglePlayback: send(2)
         case .previous:
-            if state.isPodcast { send(12) } else { navigate(.previous) }
+            if state.isPodcast { skipPodcast(by: -15) } else { navigate(.previous) }
         case .next:
-            if state.isPodcast { send(13) } else { navigate(.next) }
+            if state.isPodcast { skipPodcast(by: 15) } else { navigate(.next) }
         case .beginSeeking(let forward):
             endSeeking()
             seekingEndCommand = forward ? 9 : 11
@@ -217,28 +218,41 @@ final class MediaController {
         case .endSeeking: break
         case .seek(let fraction, let key):
             guard key == state.trackKey, let micros = state.timeline.seekMicroseconds(fraction: fraction) else { return }
-            let expectedRevision = revision
-            let seconds = Double(micros) / 1_000_000
-            seekGeneration += 1
-            let request = seekRequest.begin(position: seconds, timeline: state.timeline, now: Date().timeIntervalSince1970)
-            state.timeline = seekRequest.displayedTimeline(fallback: state.timeline)
-            state.seekPending = true
-            renderState()
-            client.seek(seconds: seconds) { [weak self] success in
-                guard let self, !self.stopped, self.revision == expectedRevision,
-                      self.seekRequest.requestID == request else { return }
-                if let fallback = self.seekRequest.complete(request, success: success) {
-                    self.state.timeline = fallback
-                }
-                self.state.seekPending = self.seekRequest.isPending
-                if !success { self.logger.error("Seek command failed") }
-                self.renderState()
-            }
+            seek(to: Double(micros) / 1_000_000)
         case .toggleBlacklist(let entry, let key):
             guard key == state.trackKey, canEditBlacklist,
                   entry == state.songBlacklistEntry || entry == state.primaryArtistBlacklistEntry else { return }
             changeBlacklist(entry, adding: !blacklist.document.contains(entry))
         case .toggleFavorite: toggleFavorite()
+        }
+    }
+
+    private func skipPodcast(by offset: Double) {
+        let timeline = state.timeline
+        guard timeline.isValid else {
+            send(offset < 0 ? 12 : 13)
+            return
+        }
+        let position = timeline.position(at: Date().timeIntervalSince1970)
+        seek(to: min(timeline.duration, max(0, position + offset)))
+    }
+
+    private func seek(to seconds: Double) {
+        let expectedRevision = revision
+        seekGeneration += 1
+        let request = seekRequest.begin(position: seconds, timeline: state.timeline, now: Date().timeIntervalSince1970)
+        state.timeline = seekRequest.displayedTimeline(fallback: state.timeline)
+        state.seekPending = true
+        renderState()
+        client.seek(seconds: seconds) { [weak self] success in
+            guard let self, !self.stopped, self.revision == expectedRevision,
+                  self.seekRequest.requestID == request else { return }
+            if let fallback = self.seekRequest.complete(request, success: success) {
+                self.state.timeline = fallback
+            }
+            self.state.seekPending = self.seekRequest.isPending
+            if !success { self.logger.error("Seek command failed") }
+            self.renderState()
         }
     }
 

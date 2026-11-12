@@ -21,10 +21,11 @@ struct MediaState {
     var isMusic: Bool { bundleIdentifier == "com.apple.Music" }
     var isPodcast: Bool { bundleIdentifier == "com.apple.podcasts" }
     var songBlacklistEntry: BlacklistEntry? {
-        guard hasMedia, !blacklistKey(artistText).isEmpty else { return nil }
+        guard hasMedia, !isPodcast, !blacklistKey(artistText).isEmpty else { return nil }
         return .song(BlacklistedSong(title: title, artistText: artistText))
     }
     var primaryArtistBlacklistEntry: BlacklistEntry? {
+        guard !isPodcast else { return nil }
         if let first = artistNames.first { return .artist(BlacklistedArtist(name: first, match: .individual)) }
         guard !blacklistKey(artistText).isEmpty else { return nil }
         return .artist(BlacklistedArtist(name: artistText, match: .fullText))

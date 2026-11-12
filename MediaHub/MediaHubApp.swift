@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 
 @main
 enum MediaHubApp {
@@ -19,7 +20,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let controller = MediaController()
     private var terminating = false
     private let addBlacklistMenu = NSMenu(title: L("blacklist.add"))
-    private let manageBlacklistMenu = NSMenu(title: L("menu.manage_blacklist"))
+    private var addBlacklistItem: NSMenuItem?
+    private var blacklistPanel: NSPanel?
     private var autoSkipItem: NSMenuItem?
     private var blacklistStatusItem: NSMenuItem?
     private var localizedMenuItems: [(item: NSMenuItem, key: String)] = []
@@ -42,7 +44,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func buildMenu() {
         addBlacklistMenu.title = L("blacklist.add")
-        manageBlacklistMenu.title = L("menu.manage_blacklist")
         let menu = NSMenu()
         menu.delegate = self
         menu.autoenablesItems = false
@@ -91,9 +92,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(autoSkip)
         let addBlacklist = NSMenuItem(title: L("blacklist.add"), action: nil, keyEquivalent: "")
         addBlacklist.submenu = addBlacklistMenu
+        addBlacklistItem = addBlacklist
         menu.addItem(addBlacklist)
-        let manageBlacklist = NSMenuItem(title: L("menu.manage_blacklist"), action: nil, keyEquivalent: "")
-        manageBlacklist.submenu = manageBlacklistMenu
+        let manageBlacklist = NSMenuItem(title: L("menu.manage_blacklist"), action: #selector(showBlacklistPanel), keyEquivalent: "")
+        manageBlacklist.target = self
         menu.addItem(manageBlacklist)
         let status = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         status.isEnabled = false
@@ -183,16 +185,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func refreshBlacklistMenus() {
         addBlacklistMenu.autoenablesItems = false
-        manageBlacklistMenu.autoenablesItems = false
         addBlacklistMenu.removeAllItems()
-        manageBlacklistMenu.removeAllItems()
         autoSkipItem?.state = controller.autoSkipEnabled ? .on : .off
         let state = controller.currentMediaState
-        let document = controller.blacklistDocument
-        if state.hasMedia && !blacklistKey(state.artistText).isEmpty {
+        addBlacklistItem?.isEnabled = !state.isPodcast
+        if let song = state.songBlacklistEntry {
             addBlacklistMenu.addItem(.sectionHeader(title: L("blacklist.song")))
-            addEntry(.song(BlacklistedSong(title: state.title, artistText: state.artistText)),
-                     title: state.title, to: addBlacklistMenu)
+            addEntry(song, title: state.title, to: addBlacklistMenu)
             addBlacklistMenu.addItem(.separator())
             addBlacklistMenu.addItem(.sectionHeader(title: L("blacklist.artists")))
             if !state.artistNames.isEmpty {
@@ -206,22 +205,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else {
             addBlacklistMenu.addItem(disabledItem(L("blacklist.waiting_for_metadata")))
         }
-        if document.artists.isEmpty && document.songs.isEmpty {
-            manageBlacklistMenu.addItem(disabledItem(L("blacklist.empty")))
-        } else {
-            if !document.artists.isEmpty {
-                manageBlacklistMenu.addItem(.sectionHeader(title: L("blacklist.artists")))
-                for artist in document.artists {
-                    addEntry(.artist(artist), title: artist.name, to: manageBlacklistMenu, removing: true)
-                }
-            }
-            if !document.songs.isEmpty {
-                if !document.artists.isEmpty { manageBlacklistMenu.addItem(.separator()) }
-                manageBlacklistMenu.addItem(.sectionHeader(title: L("blacklist.songs")))
-                for song in document.songs {
-                    addEntry(.song(song), title: "\(song.title) — \(song.artistText)", to: manageBlacklistMenu, removing: true)
-                }
-            }
+        if let panel = blacklistPanel {
+            panel.title = L("menu.manage_blacklist")
+            (panel.contentView as? NSHostingView<BlacklistManagerView>)?.rootView = blacklistManagerView()
         }
         let status = controller.blacklistStatus
         blacklistStatusItem?.isHidden = status == nil
@@ -235,17 +221,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return item
     }
 
-    private func addEntry(_ entry: BlacklistEntry, title: String, to menu: NSMenu, removing: Bool = false) {
+    private func addEntry(_ entry: BlacklistEntry, title: String, to menu: NSMenu) {
         let item = NSMenuItem(title: String(title.prefix(80)),
-                              action: removing ? #selector(removeFromBlacklist(_:)) : #selector(addToBlacklist(_:)), keyEquivalent: "")
+                              action: #selector(addToBlacklist(_:)), keyEquivalent: "")
         item.target = self
         // Capture the displayed entry; a track change while the menu is open
         // must not silently replace what the user selected.
         item.representedObject = entry
-        item.toolTip = removing ? "\(L("blacklist.remove")): \(title)" : title
+        item.toolTip = title
         let exists = controller.blacklistDocument.contains(entry)
-        item.state = !removing && exists ? .on : .off
-        item.isEnabled = controller.canEditBlacklist && (removing || !exists)
+        item.state = exists ? .on : .off
+        item.isEnabled = controller.canEditBlacklist && !exists
         menu.addItem(item)
     }
 
@@ -255,10 +241,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         refreshBlacklistMenus()
     }
 
-    @objc private func removeFromBlacklist(_ sender: NSMenuItem) {
-        guard let entry = sender.representedObject as? BlacklistEntry else { return }
-        controller.changeBlacklist(entry, adding: false)
+    @objc private func showBlacklistPanel() {
+        controller.reloadBlacklist()
+        if blacklistPanel == nil {
+            let panel = NSPanel(contentRect: NSRect(origin: .zero, size: BlacklistManagerView.size),
+                                styleMask: [.titled, .closable, .nonactivatingPanel],
+                                backing: .buffered, defer: false)
+            panel.isReleasedWhenClosed = false
+            panel.hidesOnDeactivate = false
+            panel.appearance = NSAppearance(named: .darkAqua)
+            panel.titlebarAppearsTransparent = true
+            panel.backgroundColor = NSColor(white: 0.09, alpha: 1)
+            panel.level = .floating
+            panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary, .canJoinAllApplications]
+            panel.contentView = NSHostingView(rootView: blacklistManagerView())
+            blacklistPanel = panel
+        }
         refreshBlacklistMenus()
+        guard let panel = blacklistPanel else { return }
+        let pointer = NSEvent.mouseLocation
+        if let screen = NSScreen.screens.first(where: { $0.frame.contains(pointer) }) ?? NSScreen.main {
+            let area = screen.visibleFrame
+            panel.setFrameOrigin(NSPoint(x: area.midX - panel.frame.width / 2,
+                                         y: area.midY - panel.frame.height / 2))
+        }
+        panel.orderFrontRegardless()
+        panel.makeKey()
+    }
+
+    private func blacklistManagerView() -> BlacklistManagerView {
+        BlacklistManagerView(document: controller.blacklistDocument,
+                             canRemove: controller.canEditBlacklist,
+                             status: controller.blacklistStatus) { [weak self] entry in
+            guard let self else { return }
+            controller.changeBlacklist(entry, adding: false)
+            refreshBlacklistMenus()
+        }
     }
 
     @objc private func toggleAutoSkip(_ sender: NSMenuItem) {

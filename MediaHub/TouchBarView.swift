@@ -305,6 +305,9 @@ final class TouchBarView: NSObject {
         favoriteButton.toolTip = state.favoritePending ? "\(favoriteAction) · \(L("favorite.pending"))" : favoriteAction
         favoriteButton.setAccessibilityLabel(favoriteAction)
         favoriteButton.setAccessibilityValue(state.favorite ? L("favorite.active") : L("favorite.inactive"))
+        blockSongButton.isHidden = state.isPodcast
+        blockArtistButton.isHidden = state.isPodcast
+        detailsTrailing.isHidden = !detailsOpen || state.isPodcast
         blockSongButton.isEnabled = state.canEditBlacklist && state.songBlacklistEntry != nil
         blockArtistButton.isEnabled = state.canEditBlacklist && state.primaryArtistBlacklistEntry != nil
         blockSongButton.title = state.songBlacklisted ? L("blacklist.song_blocked") : L("blacklist.block_song")
@@ -480,7 +483,7 @@ final class TouchBarView: NSObject {
             seekSurface.isHidden = !scrubOpen
             expandedTime.isHidden = !scrubOpen
             detailsControls.isHidden = !detailsOpen
-            detailsTrailing.isHidden = !detailsOpen
+            detailsTrailing.isHidden = !detailsOpen || state.isPodcast
             leftSlot.layoutSubtreeIfNeeded()
             rightSlot.layoutSubtreeIfNeeded()
             CATransaction.commit()

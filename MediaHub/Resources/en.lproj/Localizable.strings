@@ -59,3 +59,8 @@
 "display.mode.off" = "Off";
 "mini.expand" = "Expand player";
 "mini.collapse" = "Collapse player";
+"blacklist.search" = "Search songs and artists";
+"blacklist.filter" = "Filter blacklist";
+"blacklist.all" = "All";
+"blacklist.no_results" = "No matching entries";
+"blacklist.remove_item" = "Remove";

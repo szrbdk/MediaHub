@@ -59,3 +59,8 @@
 "display.mode.off" = "Kapalı";
 "mini.expand" = "Oynatıcıyı büyüt";
 "mini.collapse" = "Oynatıcıyı küçült";
+"blacklist.search" = "Şarkı ve sanatçı ara";
+"blacklist.filter" = "Karalisteyi filtrele";
+"blacklist.all" = "Tümü";
+"blacklist.no_results" = "Eşleşen kayıt yok";
+"blacklist.remove_item" = "Kaldır";
