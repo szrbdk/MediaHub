@@ -2,6 +2,7 @@ import AppKit
 
 /// An app-owned overlay; never activates MediaHub or requests notification access.
 final class TrackNotificationPresenter {
+    private let overlaySpace = OverlaySpace()
     private var panel: TrackNotificationPanel?
     private let content = MiniPlayerView(frame: .zero)
     private var transition = MiniPlayerTransition()
@@ -126,6 +127,7 @@ final class TrackNotificationPresenter {
         transition.move(to: .announcement, at: ProcessInfo.processInfo.systemUptime,
                         animated: !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
         window.orderFrontRegardless()
+        _ = overlaySpace.attach(window)
         animate()
         environmentTimer?.invalidate()
         let environmentTimer = Timer(timeInterval: 0.15, repeats: true) { [weak self] _ in self?.refreshPlacement() }
@@ -165,7 +167,10 @@ final class TrackNotificationPresenter {
         guard !dismissing, let panel, panel.isVisible, let screen = panel.screen else { return }
         let placement = placement(on: screen)
         content.setDetached(placement.detached)
-        if panel.frame != placement.frame { panel.setFrame(placement.frame, display: true) }
+        if panel.frame != placement.frame {
+            panel.setFrame(placement.frame, display: true)
+            _ = overlaySpace.attach(panel)
+        }
     }
 
     private func animate() {
@@ -200,6 +205,7 @@ final class TrackNotificationPresenter {
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         screenObserver = nil
         panel?.close()
+        overlaySpace.invalidate()
         panel = nil
     }
 }

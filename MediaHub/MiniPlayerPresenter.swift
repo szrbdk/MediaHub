@@ -2,6 +2,7 @@ import AppKit
 
 /// Owns the nonactivating screen overlay. Media commands stay in MediaController.
 final class MiniPlayerPresenter {
+    private let overlaySpace = OverlaySpace()
     var onAction: ((MediaAction) -> Void)?
     private let content = MiniPlayerView(frame: .zero)
     private var panel: MiniPlayerPanel?
@@ -98,6 +99,7 @@ final class MiniPlayerPresenter {
         } else if let panel, panel.frame != frame {
             content.setDetached(placement.detached)
             panel.setFrame(frame, display: true)
+            if panel.isVisible { _ = overlaySpace.attach(panel) }
         }
         advancePresentation()
         if visibility.form == .expanded { content.refreshTimeline() }
@@ -141,6 +143,7 @@ final class MiniPlayerPresenter {
         if form != .hidden {
             content.setPresented(true)
             window.orderFrontRegardless()
+            _ = overlaySpace.attach(window)
         }
         advancePresentation()
         animationTimer?.invalidate()
@@ -190,6 +193,7 @@ final class MiniPlayerPresenter {
         observers.removeAll()
         hideImmediately()
         panel?.close()
+        overlaySpace.invalidate()
         panel = nil
     }
 }
