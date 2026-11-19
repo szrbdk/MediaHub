@@ -57,6 +57,14 @@ final class FeaturePreferences {
 
     init(store: PreferenceStore = UserDefaults.standard) { self.store = store }
 
+    var miniPlayerPosition: NotificationPosition {
+        get {
+            (store.object(forKey: "miniPlayerPosition") as? String)
+                .flatMap(NotificationPosition.init(rawValue:)) ?? .bottomRight
+        }
+        set { store.set(newValue.rawValue, forKey: "miniPlayerPosition") }
+    }
+
     var screenDisplayMode: ScreenDisplayMode {
         get {
             if let raw = store.object(forKey: "screenDisplayMode") as? String,

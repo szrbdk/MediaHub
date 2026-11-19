@@ -136,11 +136,13 @@ final class BlacklistStore {
         }
     }
 
-    func add(_ entry: BlacklistEntry) throws {
+    @discardableResult
+    func add(_ entry: BlacklistEntry) throws -> Bool {
         guard readError == nil else { throw StorageError.unreadableFile }
         var next = document
-        guard next.add(entry) else { return }
+        guard next.add(entry) else { return false }
         try save(next)
+        return true
     }
 
     func remove(_ entry: BlacklistEntry) throws {

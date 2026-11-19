@@ -83,7 +83,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let choice = NSMenuItem(title: L(position.localizationKey), action: #selector(changeNotificationPosition(_:)), keyEquivalent: "")
             choice.target = self
             choice.representedObject = position.rawValue
-            choice.state = controller.notificationPosition == position ? .on : .off
+            choice.state = controller.displayPosition == position ? .on : .off
             localizedMenuItems.append((choice, position.localizationKey))
             positionMenu.addItem(choice)
         }
@@ -144,14 +144,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
                 if item.action == #selector(changeNotificationPosition(_:)),
                    let value = item.representedObject as? String {
-                    item.state = value == controller.notificationPosition.rawValue ? .on : .off
+                    item.state = value == controller.displayPosition.rawValue ? .on : .off
                 }
                 if item.action == #selector(changeScreenDisplayMode(_:)),
                    let value = item.representedObject as? String {
                     item.state = value == controller.screenDisplayMode.rawValue ? .on : .off
                 }
                 if item.submenu?.items.contains(where: { $0.action == #selector(changeNotificationPosition(_:)) }) == true {
-                    item.isEnabled = controller.notificationsEnabled
+                    let mode = controller.screenDisplayMode
+                    item.title = L(mode == .miniPlayer ? "menu.mini_player_position" : "menu.notification_position")
+                    item.isEnabled = mode != .off
                 }
                 if let submenu = item.submenu {
                     submenu.title = item.title
@@ -174,7 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func changeNotificationPosition(_ sender: NSMenuItem) {
         guard let value = sender.representedObject as? String,
               let position = NotificationPosition(rawValue: value) else { return }
-        controller.setNotificationPosition(position)
+        controller.setDisplayPosition(position)
         refreshMenuLanguage()
     }
 
@@ -194,13 +196,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             addEntry(song, title: state.title, to: addBlacklistMenu)
             addBlacklistMenu.addItem(.separator())
             addBlacklistMenu.addItem(.sectionHeader(title: L("blacklist.artists")))
-            if !state.artistNames.isEmpty {
-                for name in state.artistNames {
-                    addEntry(.artist(BlacklistedArtist(name: name, match: .individual)), title: name, to: addBlacklistMenu)
-                }
-            } else {
-                addEntry(.artist(BlacklistedArtist(name: state.artistText, match: .fullText)),
-                         title: state.artistText, to: addBlacklistMenu)
+            if let artist = state.fullArtistBlacklistEntry {
+                addEntry(artist, title: state.artistText, to: addBlacklistMenu)
             }
         } else {
             addBlacklistMenu.addItem(disabledItem(L("blacklist.waiting_for_metadata")))
@@ -227,7 +224,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         item.target = self
         // Capture the displayed entry; a track change while the menu is open
         // must not silently replace what the user selected.
-        item.representedObject = entry
+        item.representedObject = (entry, controller.currentMediaState.trackKey)
         item.toolTip = title
         let exists = controller.blacklistDocument.contains(entry)
         item.state = exists ? .on : .off
@@ -236,8 +233,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func addToBlacklist(_ sender: NSMenuItem) {
-        guard let entry = sender.representedObject as? BlacklistEntry else { return }
-        controller.changeBlacklist(entry, adding: true)
+        guard let (entry, key) = sender.representedObject as? (BlacklistEntry, String) else { return }
+        controller.changeBlacklist(entry, adding: true, trackKey: key)
         refreshBlacklistMenus()
     }
 

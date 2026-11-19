@@ -42,6 +42,13 @@ final class MiniPlayerView: NSView {
     private var play: NSButton!
     private var next: NSButton!
     private var favorite: NSButton!
+    private var dislike: NSButton!
+    private var choosingBlacklist = false
+    private var cancelBlacklistButton: NSButton!
+    private var blockSongButton: NSButton!
+    private var blockArtistButton: NSButton!
+    private let blacklistError = NSTextField(labelWithString: "")
+    private let blacklistPrompt = NSTextField(labelWithString: "")
     private var expand: NSButton!
 
     override init(frame: NSRect) {
@@ -83,6 +90,19 @@ final class MiniPlayerView: NSView {
         play = button("play.fill", action: #selector(togglePlayback), parent: details)
         next = button("forward.end.fill", action: #selector(goNext), parent: details)
         favorite = button("star", action: #selector(toggleFavorite), parent: details)
+        dislike = button("hand.thumbsdown", action: #selector(showBlacklistOptions), parent: details)
+        cancelBlacklistButton = choiceButton(action: #selector(cancelBlacklistOptions))
+        cancelBlacklistButton.isBordered = false
+        cancelBlacklistButton.contentTintColor = MiniPlayerStyle.secondaryTextColor
+        blockSongButton = choiceButton(action: #selector(blockSong))
+        blockArtistButton = choiceButton(action: #selector(blockArtist))
+        blacklistError.font = .systemFont(ofSize: 10, weight: .semibold)
+        blacklistError.lineBreakMode = .byTruncatingTail
+        details.addSubview(blacklistError)
+        blacklistPrompt.font = .systemFont(ofSize: 10, weight: .medium)
+        blacklistPrompt.textColor = MiniPlayerStyle.secondaryTextColor
+        blacklistPrompt.lineBreakMode = .byTruncatingTail
+        details.addSubview(blacklistPrompt)
         expand = button("waveform", action: #selector(expandPlayer), parent: self)
         expand.contentTintColor = .systemPink
         let seekCell = MiniPlayerSliderCell()
@@ -127,6 +147,7 @@ final class MiniPlayerView: NSView {
     }
 
     func setForm(_ form: MiniPlayerState.Form) {
+        if form != .expanded { resetBlacklistOptions() }
         if self.form != form { cancelSeek() }
         // Keep the outgoing content's fixed layout while it fades away.
         if form == .expanded || form == .announcement { self.form = form }
@@ -156,6 +177,10 @@ final class MiniPlayerView: NSView {
 
     func setPresented(_ presented: Bool) {
         self.presented = presented
+        if !presented && choosingBlacklist {
+            resetBlacklistOptions()
+            render(state)
+        }
         updateTextAnimations()
     }
 
@@ -199,6 +224,11 @@ final class MiniPlayerView: NSView {
     func cancelSeek() { seekTrackKey = nil }
 
     func render(_ state: MediaState) {
+        if self.state.trackKey != state.trackKey || form != .expanded {
+            resetBlacklistOptions()
+        }
+        let hideDislike = form != .expanded || choosingBlacklist || state.songBlacklistEntry == nil
+        let blacklistLayoutChanged = dislike.isHidden != hideDislike
         let animateChange = self.state.hasMedia && state.hasMedia && self.state.trackKey != state.trackKey
         let favoriteChanged = self.state.favorite != state.favorite
         if self.state.trackKey != state.trackKey || !state.timeline.isValid { cancelSeek() }
@@ -239,19 +269,32 @@ final class MiniPlayerView: NSView {
         configure(next, symbol: state.isPodcast ? "goforward.15" : "forward.end.fill",
                   key: state.isPodcast ? "playback.forward_15_seconds" : "playback.next")
         configure(favorite, symbol: state.favorite ? "star.fill" : "star", key: state.favorite ? "favorite.remove" : "favorite.add")
-        favorite.isHidden = form != .expanded || !state.hasMedia || !state.isMusic
+        favorite.isHidden = form != .expanded || choosingBlacklist || !state.hasMedia || !state.isMusic
         favorite.isEnabled = !state.favoritePending && state.hasMedia && state.isMusic
         favorite.contentTintColor = state.favorite ? .systemPink : NSColor(white: 0.7, alpha: 1)
         favorite.setAccessibilityValue(L(state.favorite ? "favorite.active" : "favorite.inactive"))
+        configure(dislike, symbol: "hand.thumbsdown", key: "blacklist.add")
+        dislike.isHidden = hideDislike
+        dislike.isEnabled = state.canEditBlacklist
         coverArea.updateLabel()
-        for control in [previous!, play!, next!] { control.isHidden = form != .expanded }
-        seek.isHidden = form != .expanded
-        time.isHidden = form != .expanded
+        let hidePlayback = form != .expanded || choosingBlacklist
+        for control in [previous!, play!, next!] { control.isHidden = hidePlayback }
+        seek.isHidden = hidePlayback
+        time.isHidden = hidePlayback
+        if choosingBlacklist { album.isHidden = true }
+        configureChoice(cancelBlacklistButton, title: "blacklist.cancel", action: "blacklist.cancel")
+        configureChoice(blockSongButton, title: "blacklist.song", action: "blacklist.block_song")
+        configureChoice(blockArtistButton, title: "blacklist.artist", action: "blacklist.block_artist")
+        blockSongButton.isEnabled = state.canEditBlacklist
+        blockArtistButton.isEnabled = state.canEditBlacklist
+        blacklistPrompt.stringValue = L("blacklist.block_prompt")
+        blacklistPrompt.isHidden = !choosingBlacklist
+        blacklistError.isHidden = !choosingBlacklist || blacklistError.stringValue.isEmpty
         configure(expand, symbol: "waveform", key: "mini.expand")
         expand.setAccessibilityValue(title.stringValue)
         seek.setAccessibilityLabel(L("touchbar.playback_position"))
         seek.isEnabled = state.hasMedia && state.timeline.isValid && !state.seekPending
-        if favoriteChanged || form == .announcement { needsLayout = true }
+        if favoriteChanged || blacklistLayoutChanged || form == .announcement { needsLayout = true }
         updateTextAnimations()
         refreshTimeline()
     }
@@ -283,7 +326,11 @@ final class MiniPlayerView: NSView {
 
     override func layout() {
         super.layout()
-        details.frame = bounds
+        let attachedInset = MiniPlayerStyle.edgeTransition
+        let detachedBody = position.surfaceRect(size: bounds.size, in: bounds.size, detached: true)
+        let detailsOffset = position.isTop && form == .expanded
+            ? (detached ? detachedBody.minY : attachedInset) : 0
+        details.frame = bounds.offsetBy(dx: 0, dy: detailsOffset)
         tint.frame = bounds
         outline.frame = bounds
         let right = bounds.width - MiniPlayerStyle.contentInset - (position.isRight || detached ? 0 : MiniPlayerStyle.edgeTransition)
@@ -291,17 +338,38 @@ final class MiniPlayerView: NSView {
         let coverX = (position.isLeft || detached ? 0 : MiniPlayerStyle.edgeTransition) + MiniPlayerStyle.contentInset
         let coverY = bounds.height - MiniPlayerStyle.edgeTransition - MiniPlayerStyle.contentInset - MiniPlayerStyle.artworkSize
         coverArea.frame = NSRect(x: coverX, y: coverY, width: MiniPlayerStyle.artworkSize, height: MiniPlayerStyle.artworkSize)
-        if position.isTop { coverArea.frame.origin.y = bounds.height - coverArea.frame.maxY }
+        if announcing && position.isTop { coverArea.frame.origin.y = bounds.height - coverArea.frame.maxY }
         if detached {
-            let body = position.surfaceRect(size: bounds.size, in: bounds.size, detached: true)
-            coverArea.frame.origin.y = body.midY - MiniPlayerStyle.artworkSize / 2
+            coverArea.frame.origin.y = detachedBody.midY - detailsOffset - MiniPlayerStyle.artworkSize / 2
+        }
+        if choosingBlacklist {
+            let textX = coverArea.frame.maxX + 14
+            title.frame = NSRect(x: textX, y: 53, width: max(0, right - textX), height: 16)
+            artist.frame = NSRect(x: textX, y: 38, width: max(0, right - textX), height: 14)
+            blacklistError.frame = NSRect(x: textX, y: 28, width: max(0, right - textX), height: 10)
+
+            let cancelWidth = ceil(cancelBlacklistButton.fittingSize.width) + 8
+            let songWidth = ceil(blockSongButton.fittingSize.width)
+            let artistWidth = ceil(blockArtistButton.fittingSize.width)
+            let cancelX = right - cancelWidth
+            let promptWidth = min(ceil(blacklistPrompt.fittingSize.width),
+                                  max(0, cancelX - textX - songWidth - artistWidth - 18))
+            let songX = textX + promptWidth + 6
+            let artistX = songX + songWidth + 4
+            blacklistPrompt.frame = NSRect(x: textX, y: 10, width: promptWidth, height: 14)
+            blockSongButton.frame = NSRect(x: songX, y: 5, width: songWidth, height: 24)
+            blockArtistButton.frame = NSRect(x: artistX, y: 5, width: artistWidth, height: 24)
+            cancelBlacklistButton.frame = NSRect(x: cancelX, y: 5, width: cancelWidth, height: 24)
+            updateSurface()
+            return
         }
         playbackBadge.frame = NSRect(x: coverArea.frame.maxX - 15, y: coverArea.frame.minY - 3, width: 18, height: 18)
         let textX = coverArea.frame.maxX + 14
+        let actionWidth: CGFloat = announcing ? 0 : (dislike.isHidden ? 32 : 58)
         title.frame = NSRect(x: textX, y: 53,
-                             width: max(20, right - textX - (announcing ? 0 : 32)), height: 16)
+                             width: max(20, right - textX - actionWidth), height: 16)
         artist.frame = NSRect(x: textX, y: 38,
-                              width: max(20, right - textX - (announcing ? 0 : 32)), height: 14)
+                              width: max(20, right - textX - actionWidth), height: 14)
         album.frame = NSRect(x: textX, y: 37, width: max(20, right - textX - (announcing ? 0 : 32)), height: 11)
         if announcing {
             let rows: [(MarqueeLabel, CGFloat)] = [(title, 19), (artist, 15), (album, 13)].filter { !$0.0.isHidden }
@@ -331,10 +399,17 @@ final class MiniPlayerView: NSView {
         if let image = favorite.image, image.size.width > 0, image.alignmentRect.width > 0 {
             imageRight = imageRect.minX + image.alignmentRect.maxX * imageRect.width / image.size.width
         }
-        favorite.frame = NSRect(x: contentRight - imageRight, y: 44, width: 26, height: 26)
+        dislike.frame = NSRect(x: contentRight - 24, y: 44, width: 26, height: 26)
+        favorite.frame = NSRect(x: contentRight - imageRight - (dislike.isHidden ? 0 : 26),
+                                y: 44, width: 26, height: 26)
         let edge = surfaceEdge
-        let body = NSRect(x: bounds.maxX - pose.size.width + edge, y: 0,
-                          width: max(0, pose.size.width - edge), height: max(0, pose.size.height - edge))
+        var body = position.surfaceRect(size: pose.size, in: bounds.size, detached: detached)
+        if !detached {
+            if !position.isLeft { body.origin.x += edge }
+            body.size.width = max(0, body.width - (position.isLeft || position.isRight ? edge : 2 * edge))
+            if position.isTop { body.origin.y += edge }
+            body.size.height = max(0, body.height - edge)
+        }
         expand.frame = NSRect(x: body.midX - 18, y: body.midY - 18, width: 36, height: 36)
         updateSurface()
     }
@@ -397,6 +472,69 @@ final class MiniPlayerView: NSView {
     @objc private func togglePlayback() { onAction?(.togglePlayback) }
     @objc private func goNext() { onAction?(.next) }
     @objc private func toggleFavorite() { onAction?(.toggleFavorite) }
+
+    private func choiceButton(action: Selector) -> NSButton {
+        let button = MiniPlayerButton(title: "", target: self, action: action)
+        button.bezelStyle = .rounded
+        button.controlSize = .small
+        button.font = .systemFont(ofSize: 11)
+        details.addSubview(button)
+        return button
+    }
+
+    private func configureChoice(_ button: NSButton, title: String, action: String) {
+        button.title = L(title)
+        button.toolTip = L(action)
+        button.setAccessibilityLabel(L(action))
+        button.isHidden = !choosingBlacklist
+    }
+
+    private func resetBlacklistOptions() {
+        choosingBlacklist = false
+        blacklistError.stringValue = ""
+        blacklistError.toolTip = nil
+        blacklistError.textColor = MiniPlayerStyle.secondaryTextColor
+    }
+
+    private func setBlacklistOptionsVisible(_ visible: Bool) {
+        if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            let fade = CATransition()
+            fade.type = .fade
+            fade.duration = 0.15
+            details.layer?.add(fade, forKey: "blacklistOptions")
+        }
+        resetBlacklistOptions()
+        choosingBlacklist = visible
+        render(state)
+        needsLayout = true
+    }
+
+    @objc private func showBlacklistOptions() {
+        guard state.canEditBlacklist, state.songBlacklistEntry != nil,
+              state.fullArtistBlacklistEntry != nil else { return }
+        setBlacklistOptionsVisible(true)
+    }
+
+    @objc private func cancelBlacklistOptions() { setBlacklistOptionsVisible(false) }
+    @objc private func blockSong() { submitBlacklistEntry(state.songBlacklistEntry) }
+    @objc private func blockArtist() { submitBlacklistEntry(state.fullArtistBlacklistEntry) }
+
+    private func submitBlacklistEntry(_ entry: BlacklistEntry?) {
+        guard choosingBlacklist, let entry else { return }
+        let key = state.trackKey
+        onAction?(.addToBlacklist(entry, trackKey: key) { [weak self] saved in
+            guard let self, self.choosingBlacklist, self.state.trackKey == key else { return }
+            if saved {
+                self.setBlacklistOptionsVisible(false)
+            } else {
+                let message = L("error.blacklist_save")
+                self.blacklistError.stringValue = message
+                self.blacklistError.textColor = .systemPink
+                self.blacklistError.toolTip = message
+                self.blacklistError.isHidden = false
+            }
+        })
+    }
     @objc private func previewSeek() { if seekTrackKey == state.trackKey { refreshTimeline() } }
     @objc private func expandPlayer() { onExpand?() }
 }

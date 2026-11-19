@@ -5,6 +5,9 @@
 "menu.manage_blacklist" = "Manage blacklist";
 "menu.quit" = "Quit";
 "blacklist.song" = "Song";
+"blacklist.artist" = "Artist";
+"blacklist.cancel" = "Cancel";
+"blacklist.block_prompt" = "Block";
 "blacklist.songs" = "Songs";
 "blacklist.artists" = "Artists";
 "blacklist.waiting_for_metadata" = "Waiting for song and artist information";
@@ -47,6 +50,7 @@
 "language.english" = "English";
 "language.turkish" = "Turkish";
 "menu.notification_position" = "Notification position";
+"menu.mini_player_position" = "Mini player position";
 "notification.position.topLeft" = "Top left";
 "notification.position.topCenter" = "Top center";
 "notification.position.topRight" = "Top right";

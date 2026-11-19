@@ -17,6 +17,21 @@ final class MiniPlayerPresenter {
     private var transition = MiniPlayerTransition()
     private var appliedForm: MiniPlayerState.Form?
     private var screenFrame: NSRect?
+    private var position: NotificationPosition = .bottomRight
+
+    func setPosition(_ position: NotificationPosition) {
+        guard self.position != position else { return }
+        self.position = position
+        screenFrame = nil
+        apply(animated: false)
+    }
+
+    private func placement(on screen: NSScreen) -> (frame: NSRect, detached: Bool) {
+        let detached = position.isTop && NSMenu.menuBarVisible()
+        let barHeight = max(NSStatusBar.system.thickness, screen.frame.maxY - screen.visibleFrame.maxY)
+        return (position.frame(in: screen.frame, safeTop: screen.safeAreaInsets.top,
+                               detached: detached, menuBarHeight: barHeight), detached)
+    }
 
     func start() {
         content.onAction = { [weak self] in self?.onAction?($0) }
@@ -71,11 +86,19 @@ final class MiniPlayerPresenter {
     private func tick() {
         guard enabled, !suspended, let screen = NSScreen.screens.first else { return }
         let pointer = NSEvent.mouseLocation
-        let corner = NSRect(x: screen.frame.maxX - 24, y: screen.frame.minY, width: 24, height: 24)
+        let placement = placement(on: screen)
+        let frame = placement.frame
+        let trigger = position.surfaceRect(size: CGSize(width: 24, height: 24), in: frame.size)
+            .offsetBy(dx: frame.minX, dy: frame.minY)
         visibility.update(at: ProcessInfo.processInfo.systemUptime,
                           pointerInside: pointerIsOnSurface(pointer),
-                          pointerInCorner: corner.contains(pointer))
-        if appliedForm != visibility.form || screenFrame != screen.frame { apply(animated: true) }
+                          pointerInCorner: trigger.contains(pointer))
+        if appliedForm != visibility.form || screenFrame != screen.frame {
+            apply(animated: true)
+        } else if let panel, panel.frame != frame {
+            content.setDetached(placement.detached)
+            panel.setFrame(frame, display: true)
+        }
         advancePresentation()
         if visibility.form == .expanded { content.refreshTimeline() }
     }
@@ -84,7 +107,8 @@ final class MiniPlayerPresenter {
         guard enabled, !suspended, let screen = NSScreen.screens.first else { return }
         let form = visibility.form
         // Keep the window and text layout fixed. Only the drawn surface morphs.
-        let frame = MiniPlayerState.frame(for: .expanded, in: screen.frame)
+        let placement = placement(on: screen)
+        let frame = placement.frame
         let window: MiniPlayerPanel
         if let panel { window = panel }
         else {
@@ -109,6 +133,8 @@ final class MiniPlayerPresenter {
         if screenFrame != screen.frame { content.cancelSeek() }
         screenFrame = screen.frame
         window.setFrame(frame, display: false)
+        content.setPosition(position)
+        content.setDetached(placement.detached)
         content.setForm(form)
         transition.move(to: form, at: ProcessInfo.processInfo.systemUptime,
                         animated: animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)

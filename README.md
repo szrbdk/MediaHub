@@ -51,7 +51,7 @@ The favorite button adds or removes favorites in Music.
 
 ## Block songs and artists
 
-Open **Add to blacklist** in the menu bar to block the current song or an artist. You can also use the buttons in the Touch Bar song actions. Adding an entry leaves the current song playing; automatic skipping applies when a new track starts.
+Open **Add to blacklist** in the menu bar, use the blacklist buttons in the Touch Bar song actions, or click the thumbs-down button in the mini player. Choose whether to block the current song or its artist. After saving the entry, MediaHub advances to the next track.
 
 Open **Manage blacklist** and select an entry to remove it. Turn off **Automatic skipping** whenever you want to listen without the filter.
 
@@ -73,11 +73,11 @@ Choose **On-screen display → Notifications**, **Mini player**, or **Off** in t
 
 ## Mini player
 
-The mini player sits in the bottom-right corner of your primary screen, including over full-screen apps. It shows artwork, the track, artist and album, playback controls, a Music favorite button, and a seek bar. Drag the seek bar to preview a position and release to apply it.
+The mini player defaults to the bottom-right corner of your primary screen, including over full-screen apps. Use **Mini player position** in the menu bar to choose one of six positions. This choice is saved separately from the notification position. The player shows artwork, the track, artist and album, playback controls, a Music favorite button, and a seek bar. Drag the seek bar to preview a position and release to apply it.
 
-The expanded player stays visible until you collapse it. Hover over the artwork to reveal the collapse button. The compact square hides after the pointer has been away for three seconds. Move the pointer to the bottom-right corner briefly to bring it back, then click to expand. With no media playing, you can still reveal the player to see its waiting state.
+The expanded player stays visible until you collapse it. Hover over the artwork to reveal the collapse button. The compact square hides after the pointer has been away for three seconds. Move the pointer to the player's selected corner or edge briefly to bring it back, then click to expand. With no media playing, you can still reveal the player to see its waiting state.
 
-While collapsed, a track change or a pause/resume briefly opens the same notification card with artwork, title, artist, album, and playback state before returning to the compact or hidden state. It follows the same announcement rules as notifications. The card uses the same size as the expanded player. Transitions grow from the bottom-right corner and shrink back into it.
+While collapsed, a track change or a pause/resume briefly opens the same notification card with artwork, title, artist, album, and playback state before returning to the compact or hidden state. It follows the same announcement rules as notifications. The card uses the same size as the expanded player. Transitions grow from the selected corner or edge and shrink back into it.
 
 ## Language
 

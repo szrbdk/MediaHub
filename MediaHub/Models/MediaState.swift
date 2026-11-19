@@ -27,6 +27,10 @@ struct MediaState {
     var primaryArtistBlacklistEntry: BlacklistEntry? {
         guard !isPodcast else { return nil }
         if let first = artistNames.first { return .artist(BlacklistedArtist(name: first, match: .individual)) }
+        return fullArtistBlacklistEntry
+    }
+    var fullArtistBlacklistEntry: BlacklistEntry? {
+        guard hasMedia, !isPodcast else { return nil }
         guard !blacklistKey(artistText).isEmpty else { return nil }
         return .artist(BlacklistedArtist(name: artistText, match: .fullText))
     }
@@ -59,6 +63,7 @@ struct MediaState {
 enum MediaAction {
     case togglePlayback, previous, next, toggleFavorite
     case toggleBlacklist(BlacklistEntry, trackKey: String)
+    case addToBlacklist(BlacklistEntry, trackKey: String, completion: (Bool) -> Void)
     case beginSeeking(forward: Bool)
     case endSeeking
     case seek(fraction: Double, trackKey: String)

@@ -13,6 +13,9 @@ final class MediaController {
     var screenDisplayMode: ScreenDisplayMode { preferences.screenDisplayMode }
     var notificationsEnabled: Bool { screenDisplayMode == .notifications }
     var notificationPosition: NotificationPosition { preferences.notificationPosition }
+    var displayPosition: NotificationPosition {
+        screenDisplayMode == .miniPlayer ? preferences.miniPlayerPosition : notificationPosition
+    }
     var touchBarEnabled: Bool { preferences.isEnabled(.touchBar) }
     var autoSkipEnabled: Bool { preferences.isEnabled(.autoSkip) }
     var currentMediaState: MediaState { state }
@@ -50,6 +53,7 @@ final class MediaController {
         view.onAction = { [weak self] in self?.handle($0) }
         miniPlayer.onAction = { [weak self] in self?.handle($0) }
         miniPlayer.start()
+        miniPlayer.setPosition(preferences.miniPlayerPosition)
         miniPlayer.setEnabled(screenDisplayMode == .miniPlayer)
         presenter.onContextChange = { [weak self] in self?.endSeeking() }
         presenter.setEnabled(touchBarEnabled)
@@ -78,6 +82,15 @@ final class MediaController {
         trackNotifications.setPosition(position)
     }
 
+    func setDisplayPosition(_ position: NotificationPosition) {
+        if screenDisplayMode == .miniPlayer {
+            preferences.miniPlayerPosition = position
+            miniPlayer.setPosition(position)
+        } else if notificationsEnabled {
+            setNotificationPosition(position)
+        }
+    }
+
     func setTouchBarEnabled(_ enabled: Bool) {
         preferences.setEnabled(enabled, for: .touchBar)
         presenter.setEnabled(enabled)
@@ -104,20 +117,30 @@ final class MediaController {
         renderState()
     }
 
-    func changeBlacklist(_ entry: BlacklistEntry, adding: Bool) {
-        guard !adding || !state.isPodcast else { return }
+    @discardableResult
+    func changeBlacklist(_ entry: BlacklistEntry, adding: Bool, trackKey: String? = nil) -> Bool {
+        guard !stopped else { return false }
+        if adding {
+            guard state.hasMedia, !state.isPodcast, trackKey == state.trackKey else { return false }
+        }
         do {
             blacklist.reload()
-            if adding { try blacklist.add(entry) }
-            else { try blacklist.remove(entry) }
+            if adding {
+                guard try blacklist.add(entry) else { return false }
+            } else {
+                try blacklist.remove(entry)
+            }
             blacklistOperationError = nil
-            // Editing the list never re-evaluates or skips the currently playing song.
             autoSkip.ignoreCurrent(state)
+            if adding { navigate(.next) }
+            renderState()
+            return true
         } catch {
             blacklistOperationError = L("error.blacklist_save")
             logger.error("Blacklist write failed: \(error.localizedDescription, privacy: .public)")
         }
         renderState()
+        return false
     }
 
     private func renderState() {
@@ -222,7 +245,13 @@ final class MediaController {
         case .toggleBlacklist(let entry, let key):
             guard key == state.trackKey, canEditBlacklist,
                   entry == state.songBlacklistEntry || entry == state.primaryArtistBlacklistEntry else { return }
-            changeBlacklist(entry, adding: !blacklist.document.contains(entry))
+            changeBlacklist(entry, adding: !blacklist.document.contains(entry), trackKey: key)
+        case .addToBlacklist(let entry, let key, let completion):
+            guard entry == state.songBlacklistEntry || entry == state.fullArtistBlacklistEntry else {
+                completion(false)
+                return
+            }
+            completion(changeBlacklist(entry, adding: true, trackKey: key))
         case .toggleFavorite: toggleFavorite()
         }
     }

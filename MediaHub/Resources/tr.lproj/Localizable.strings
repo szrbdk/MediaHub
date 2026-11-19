@@ -5,6 +5,9 @@
 "menu.manage_blacklist" = "Karalisteyi yönet";
 "menu.quit" = "Çıkış";
 "blacklist.song" = "Şarkı";
+"blacklist.artist" = "Sanatçı";
+"blacklist.cancel" = "İptal";
+"blacklist.block_prompt" = "Engelle";
 "blacklist.songs" = "Şarkılar";
 "blacklist.artists" = "Sanatçılar";
 "blacklist.waiting_for_metadata" = "Şarkı ve sanatçı bilgisi bekleniyor";
@@ -47,6 +50,7 @@
 "language.english" = "İngilizce";
 "language.turkish" = "Türkçe";
 "menu.notification_position" = "Bildirim konumu";
+"menu.mini_player_position" = "Mini oynatıcı konumu";
 "notification.position.topLeft" = "Üst sol";
 "notification.position.topCenter" = "Üst orta";
 "notification.position.topRight" = "Üst sağ";
